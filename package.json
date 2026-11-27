@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "node apps/web/node_modules/vite/bin/vite.js apps/web",
     "build": "node apps/web/node_modules/vite/bin/vite.js build apps/web",
+    "vercel-build": "node scripts/vercel-build.mjs",
     "preview": "node apps/web/node_modules/vite/bin/vite.js preview apps/web",
     "typecheck": "tsc -p packages/domain && tsc -p packages/blocks && tsc -p packages/storage && tsc -p packages/search && tsc -p packages/data && tsc -p apps/web",
     "lint": "eslint .",
