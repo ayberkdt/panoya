@@ -11,12 +11,14 @@ import {
   Link2,
   Mail,
   Plus,
+  Search,
   Sparkles,
   Trash2,
   Type,
 } from 'lucide-react';
 import {
   useDeferredValue,
+  useEffect,
   useId,
   useMemo,
   useRef,
@@ -25,7 +27,7 @@ import {
   type ReactNode,
 } from 'react';
 import type { TreeNode } from '@panoya/domain';
-import type { QueryError, SearchHit } from '@panoya/search';
+import { hasCriteria, parseQuery, type QueryError, type SearchHit } from '@panoya/search';
 import { revealBlock } from '../../app/focus';
 import { navigate } from '../../app/router';
 import { useServices } from '../../app/services';
@@ -34,6 +36,7 @@ import { useWorkspaceIndex } from '../../app/workspaceData';
 import { BusyNote } from '../../components/BusyNote';
 import { Dialog } from '../../components/Dialog';
 import { useI18n, type MessageKey } from '../../i18n';
+import { tintOf } from '../blocks/catalog';
 
 interface Props {
   open: boolean;
@@ -73,6 +76,55 @@ const fieldKey: Record<SearchHit['field'], MessageKey> = {
   content: 'search.field.content',
 };
 
+/** Friendly filters: each chip adds block types to the query without showing any syntax. */
+const SCOPES: { id: string; key: MessageKey; types: string[]; icon: ReactNode; tint: string }[] = [
+  { id: 'all', key: 'search.scope.all', types: [], icon: <Search size={14} />, tint: 'all' },
+  {
+    id: 'page',
+    key: 'search.scope.pages',
+    types: ['page'],
+    icon: <FileText size={14} />,
+    tint: 'gray',
+  },
+  {
+    id: 'link',
+    key: 'search.scope.links',
+    types: ['link'],
+    icon: <Link2 size={14} />,
+    tint: 'blue',
+  },
+  {
+    id: 'mail',
+    key: 'search.scope.mail',
+    types: ['mailDraft'],
+    icon: <Mail size={14} />,
+    tint: 'pink',
+  },
+  {
+    id: 'notes',
+    key: 'search.scope.notes',
+    types: ['richText', 'heading', 'quickCopy', 'code'],
+    icon: <Type size={14} />,
+    tint: 'yellow',
+  },
+  {
+    id: 'todo',
+    key: 'search.scope.todo',
+    types: ['checklist'],
+    icon: <CheckSquare size={14} />,
+    tint: 'purple',
+  },
+];
+
+const tileTint = (type: string) =>
+  type === 'folder'
+    ? 'yellow'
+    : type === 'notebook'
+      ? 'blue'
+      : type === 'page'
+        ? 'gray'
+        : tintOf(type);
+
 /** Renders text with highlighted ranges as React nodes (never as HTML). */
 function Highlighted({ text, ranges }: { text: string; ranges: [number, number][] }) {
   const parts: ReactNode[] = [];
@@ -97,6 +149,9 @@ export function CommandPalette({ open, onClose, actions }: Props) {
   const index = useWorkspaceIndex();
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
+  const [scope, setScope] = useState('all');
+  /** Enter pressed while results were still coming: open the first one as soon as it arrives. */
+  const [pendingEnter, setPendingEnter] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const listId = useId();
   const deferredQuery = useDeferredValue(query);
@@ -123,22 +178,27 @@ export function CommandPalette({ open, onClose, actions }: Props) {
 
   const { hits, errors } = useMemo(() => {
     void revision; // re-run when the index changes
-    if (!deferredQuery.trim() || status !== 'ready')
-      return { hits: [] as SearchHit[], errors: [] as QueryError[] };
-    const result = search.search(deferredQuery, 30);
+    const types = SCOPES.find((x) => x.id === scope)?.types ?? [];
+    const parsed = parseQuery(deferredQuery);
+    const query = { ...parsed, types: [...parsed.types, ...types] };
+    // Typed filter mistakes are still reported even when nothing else is left to search for.
+    if (status !== 'ready' || !hasCriteria(query))
+      return { hits: [] as SearchHit[], errors: parsed.errors };
+    const result = search.search(query, 30);
     return { hits: result.hits, errors: result.query.errors };
-  }, [deferredQuery, search, status, revision]);
+  }, [deferredQuery, search, status, revision, scope]);
 
   const recent = useMemo(() => {
-    if (query.trim()) return [];
+    if (query.trim() || scope !== 'all') return [];
     return [...index.pages.values()]
       .filter((p) => p.trashed === 0 && index.pathTo(p.id).length > 0)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .slice(0, 6);
-  }, [index, query]);
+  }, [index, query, scope]);
 
   const q = foldText(query.trim());
-  const matchedCommands = commands.filter((c) => !q || foldText(c.label).includes(q));
+  const matchedCommands =
+    scope === 'all' ? commands.filter((c) => !q || foldText(c.label).includes(q)) : [];
 
   const firstPageIn = (containerId: string): string | null => {
     const walk = (nodes: TreeNode[], inside: boolean): string | null => {
@@ -175,8 +235,19 @@ export function CommandPalette({ open, onClose, actions }: Props) {
     if (!entry) return;
     onClose();
     setQuery('');
+    setScope('all');
     entry.run();
   };
+
+  const firstHit = hits[0];
+  useEffect(() => {
+    if (!pendingEnter || !firstHit) return;
+    // An external event (search results arriving) completes the user's Enter.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPendingEnter(false);
+    execute(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingEnter, firstHit]);
 
   const errorText = (e: QueryError) =>
     e.code === 'badDate'
@@ -189,6 +260,7 @@ export function CommandPalette({ open, onClose, actions }: Props) {
     i: number,
     key: string,
     icon: ReactNode,
+    tint: string,
     main: ReactNode,
     aside?: ReactNode,
     sub?: ReactNode,
@@ -202,7 +274,7 @@ export function CommandPalette({ open, onClose, actions }: Props) {
       onPointerEnter={() => setActive(i)}
       onClick={() => execute(i)}
     >
-      <span className="menu-icon" aria-hidden="true">
+      <span className={`search-tile opt-${tint}`} aria-hidden="true">
         {icon}
       </span>
       <span className="search-main">
@@ -213,58 +285,73 @@ export function CommandPalette({ open, onClose, actions }: Props) {
     </div>
   );
 
+  // Closing starts the next search fresh: a scope left on "Linkler" would hide everything else.
+  const close = () => {
+    setScope('all');
+    setQuery('');
+    setActive(0);
+    onClose();
+  };
+
   let i = -1;
   return (
     <Dialog
       open={open}
       title={t('palette.title')}
-      onClose={onClose}
+      onClose={close}
       initialFocus={inputRef}
       sheet={false}
     >
-      <input
-        ref={inputRef}
-        className="input"
-        role="combobox"
-        aria-expanded="true"
-        aria-controls={listId}
-        aria-activedescendant={entries[active] ? `${listId}-${active}` : undefined}
-        aria-label={t('palette.placeholder')}
-        placeholder={t('palette.placeholder')}
-        value={query}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setActive(0);
-        }}
-        onKeyDown={(e) => {
-          if (e.nativeEvent.isComposing) return;
-          if (e.key === 'ArrowDown') setActive((a) => Math.min(a + 1, entries.length - 1));
-          else if (e.key === 'ArrowUp') setActive((a) => Math.max(a - 1, 0));
-          else if (e.key === 'Enter') execute(active);
-          else return;
-          e.preventDefault();
-        }}
-      />
-      {status === 'building' ? (
-        <BusyNote active label={t('search.building')} />
-      ) : (
-        <p className="muted small search-hint">
-          {status === 'error' ? (
-            t('search.failed')
-          ) : (
-            <>
-              <span>{t('search.hint')}</span>
-              {t('search.hintExamples')
-                .split(' ')
-                .map((example) => (
-                  <code key={example} className="hint-chip">
-                    {example}
-                  </code>
-                ))}
-            </>
-          )}
-        </p>
-      )}
+      <div className="search-field">
+        <Search size={18} aria-hidden="true" className="search-field-icon" />
+        <input
+          ref={inputRef}
+          className="input search-input"
+          role="combobox"
+          aria-expanded="true"
+          aria-controls={listId}
+          aria-activedescendant={entries[active] ? `${listId}-${active}` : undefined}
+          aria-label={t('palette.placeholder')}
+          placeholder={t('palette.placeholder')}
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setPendingEnter(false);
+            setActive(0);
+          }}
+          onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing) return;
+            if (e.key === 'ArrowDown') setActive((a) => Math.min(a + 1, entries.length - 1));
+            else if (e.key === 'ArrowUp') setActive((a) => Math.max(a - 1, 0));
+            else if (e.key === 'Enter') {
+              if (entries[active]) execute(active);
+              else if (query.trim()) setPendingEnter(true); // slow device: results not in yet
+            } else return;
+            e.preventDefault();
+          }}
+        />
+      </div>
+      <div className="scope-chips" role="radiogroup" aria-label={t('search.scope.label')}>
+        {SCOPES.map((x) => (
+          <button
+            key={x.id}
+            type="button"
+            role="radio"
+            aria-checked={scope === x.id}
+            className={`scope-chip${scope === x.id ? ' is-active' : ''}${x.tint !== 'all' ? ` opt-${x.tint}` : ''}`}
+            onClick={() => {
+              setScope(x.id);
+              setActive(0);
+              inputRef.current?.focus();
+            }}
+          >
+            {x.icon}
+            <span>{t(x.key)}</span>
+          </button>
+        ))}
+      </div>
+      {status === 'building' && <BusyNote active label={t('search.building')} />}
+      {status === 'error' && <p className="hint-warn">{t('search.failed')}</p>}
       {errors.length > 0 && (
         <div className="hint-warn" role="status">
           {errors.map((e, k) => (
@@ -284,6 +371,7 @@ export function CommandPalette({ open, onClose, actions }: Props) {
                 i,
                 `r-${p.id}`,
                 typeIcon.page,
+                'gray',
                 p.title || t('tree.untitled'),
                 index
                   .pathTo(p.id)
@@ -294,7 +382,7 @@ export function CommandPalette({ open, onClose, actions }: Props) {
             })}
           </div>
         )}
-        {query.trim() !== '' &&
+        {(query.trim() !== '' || scope !== 'all') &&
           status === 'ready' &&
           hits.length === 0 &&
           matchedCommands.length === 0 && <p className="muted">{t('palette.none')}</p>}
@@ -317,10 +405,16 @@ export function CommandPalette({ open, onClose, actions }: Props) {
                 i,
                 `h-${doc.id}`,
                 typeIcon[doc.type] ?? typeIcon.page,
+                tileTint(doc.type),
                 hit.field === 'title' ? <Highlighted text={title} ranges={titleRanges} /> : title,
-                <>
-                  {doc.path.join(' / ')} · {t(fieldKey[hit.field])}
-                </>,
+                // where it is; which field matched only when it is not the title itself
+                hit.field === 'title' ? (
+                  doc.path.join(' / ')
+                ) : (
+                  <>
+                    {doc.path.join(' / ')} · {t(fieldKey[hit.field])}
+                  </>
+                ),
                 hit.field !== 'title' && hit.snippet ? (
                   <Highlighted text={hit.snippet.text} ranges={hit.snippet.highlights} />
                 ) : undefined,
@@ -335,7 +429,7 @@ export function CommandPalette({ open, onClose, actions }: Props) {
             </p>
             {matchedCommands.map((c) => {
               i++;
-              return option(i, `c-${c.id}`, c.icon, c.label);
+              return option(i, `c-${c.id}`, c.icon, 'command', c.label);
             })}
           </div>
         )}

@@ -316,6 +316,41 @@ class Plan {
     return assigned;
   }
 
+  /**
+   * Ranks for `count` new consecutive items at `placement`, from siblings read once (callers pass
+   * the list they already loaded). Appending N rows used to read every sibling N times — O(N²)
+   * for a paste, O(rows) twice for one wallet entry. Falls back to `allocateRank` (which can
+   * rebalance) when keys would grow too long.
+   */
+  private allocateRanks(
+    siblings: (Entity & { rank: string })[],
+    placement: Placement,
+    count: number,
+  ): string[] | null {
+    let index: number;
+    switch (placement.kind) {
+      case 'start':
+        index = 0;
+        break;
+      case 'end':
+        index = siblings.length;
+        break;
+      case 'before':
+      case 'after': {
+        const anchor = siblings.findIndex((x) => x.id === placement.id);
+        if (anchor < 0) throw new DomainError('VALIDATION', 'error.placement.anchorMissing');
+        index = placement.kind === 'before' ? anchor : anchor + 1;
+        break;
+      }
+    }
+    const ranks = ranksBetween(
+      siblings[index - 1]?.rank ?? null,
+      siblings[index]?.rank ?? null,
+      count,
+    );
+    return ranks.some(needsRebalance) ? null : ranks;
+  }
+
   private checkPayloadSize(payload: JsonValue): void {
     if (jsonByteLength(payload) > LIMITS.blockPayloadBytes) {
       throw new DomainError('LIMIT', 'error.block.payloadTooLarge', {
@@ -777,13 +812,19 @@ class Plan {
     const problems = { count: 0 };
     let placement: Placement = c.placement;
     let lastId: string | undefined;
-    for (const row of c.rows) {
-      const id = await this.newId('datasetRow', row.id);
+    const ranks = this.allocateRanks(
+      existing as unknown as (Entity & { rank: string })[],
+      c.placement,
+      c.rows.length,
+    );
+    for (const [i, row] of c.rows.entries()) {
+      const id =
+        row.id === undefined ? this.env.ids.newId() : await this.newId('datasetRow', row.id);
       const record: DatasetRow = {
         ...this.base(id),
         kind: 'datasetRow',
         datasetId: dataset.id,
-        rank: await this.allocateRank('datasetRow', dataset.id, placement, id),
+        rank: ranks?.[i] ?? (await this.allocateRank('datasetRow', dataset.id, placement, id)),
         cells: this.checkCells(dataset.columns, row.cells, problems),
       };
       this.stage('datasetRow', null, record);
@@ -839,13 +880,21 @@ class Plan {
       const existing = await this.childrenOf('datasetRow', dataset.id, { activeOnly: true });
       if (existing.length + c.appendRows.length > DATASET_LIMITS.rows) throw this.tooLarge();
       let placement: Placement = { kind: 'end' };
-      for (const row of c.appendRows) {
-        const id = await this.newId('datasetRow', row.id);
+      const ranks = this.allocateRanks(
+        existing as unknown as (Entity & { rank: string })[],
+        placement,
+        c.appendRows.length,
+      );
+      for (const [i, row] of c.appendRows.entries()) {
+        // No await when no id is requested: a long chain of non-database awaits lets an
+        // IndexedDB transaction commit early (Dexie PrematureCommitError on a 2,000-row paste).
+        const id =
+          row.id === undefined ? this.env.ids.newId() : await this.newId('datasetRow', row.id);
         this.stage('datasetRow', null, {
           ...this.base(id),
           kind: 'datasetRow',
           datasetId: dataset.id,
-          rank: await this.allocateRank('datasetRow', dataset.id, placement, id),
+          rank: ranks?.[i] ?? (await this.allocateRank('datasetRow', dataset.id, placement, id)),
           cells: this.checkCells(dataset.columns, row.cells, problems),
         });
         placement = { kind: 'after', id };

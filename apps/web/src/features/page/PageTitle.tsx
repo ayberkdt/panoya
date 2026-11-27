@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import type { Page } from '@panoya/domain';
+import { FileText } from 'lucide-react';
+import type { OptionColor, Page } from '@panoya/domain';
 import { useRunCommand, useServices } from '../../app/services';
 import { useI18n } from '../../i18n';
 
@@ -10,10 +11,13 @@ export function PageTitle({
   page,
   autoFocus,
   onEnter,
+  color = 'gray',
 }: {
   page: Page;
   autoFocus: boolean;
   onEnter: () => void;
+  /** Colour of the page's top folder (icon tile beside the title). */
+  color?: OptionColor;
 }) {
   const { t } = useI18n();
   const { workspace } = useServices();
@@ -40,6 +44,9 @@ export function PageTitle({
 
   return (
     <h1 className="page-title-wrap">
+      <span className={`page-icon opt-${color}`} aria-hidden="true">
+        <FileText size={22} />
+      </span>
       <input
         id="page-title"
         className="page-title"

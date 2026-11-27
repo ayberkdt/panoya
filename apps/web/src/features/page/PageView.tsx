@@ -6,6 +6,7 @@ import { useTrash } from '../../app/actions';
 import { navigate } from '../../app/router';
 import { useRunCommand, useServices, useStoreQuery } from '../../app/services';
 import { useWorkspaceIndex } from '../../app/workspaceData';
+import { entityColor } from '../../app/colors';
 import { CopyButton } from '../../components/Copy';
 import { MenuButton } from '../../components/Menu';
 import { SaveIndicator } from '../../components/SaveIndicator';
@@ -13,6 +14,7 @@ import { useI18n } from '../../i18n';
 import { blockUiByType } from '../blocks/catalog';
 import { MoveDialog, type MoveRequest } from '../sidebar/MoveDialog';
 import { ImportDialog } from '../table/ImportDialog';
+import { MANUAL_SOURCE, walletCurrency, walletTemplate } from '../table/templates';
 import { AddBlockMenu } from './AddBlockMenu';
 import { BlockFrame } from './BlockFrame';
 import { BlockHost } from './BlockHost';
@@ -23,7 +25,7 @@ export function PageView({ pageId }: { pageId: string }) {
   const index = useWorkspaceIndex();
   const run = useRunCommand();
   const trash = useTrash();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [focusId, setFocusId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [slashSource, setSlashSource] = useState<string | null>(null);
@@ -60,6 +62,19 @@ export function PageView({ pageId }: { pageId: string }) {
     setSlashSource(null);
     if (type === 'table') {
       setTablePlacement(source ? { kind: 'after', id: source.id } : { kind: 'end' });
+      return;
+    }
+    if (type === 'wallet') {
+      // A wallet is a ready-made table: created at once, statistics included.
+      const result = await run({
+        type: 'createTableBlock',
+        workspaceId: workspace.id,
+        pageId,
+        placement: source ? { kind: 'after', id: source.id } : { kind: 'end' },
+        ...walletTemplate(t, walletCurrency(locale, workspace.baseCurrency)),
+        source: MANUAL_SOURCE,
+      });
+      if (result?.mutation.primary) setFocusId(result.mutation.primary.id);
       return;
     }
     if (source) {
@@ -109,73 +124,76 @@ export function PageView({ pageId }: { pageId: string }) {
 
   return (
     <main className="page" id="main" aria-labelledby="page-title">
-      <div className="page-toolbar">
-        <nav className="breadcrumb" aria-label="breadcrumb">
-          {path.slice(0, -1).map((item) => (
-            <span key={item.id}>{item.name}</span>
-          ))}
-        </nav>
-        <div className="page-actions">
-          <SaveIndicator />
-          <CopyButton
-            getText={() => pageToPlainText(registry, page.title, blocks)}
-            label={t('page.copyAll')}
-            variant="icon"
-            disabled={blocks.length === 0}
-          />
-          <MenuButton
-            label={t('page.more')}
-            items={[
-              {
-                id: 'dup',
-                label: t('tree.duplicate'),
-                icon: <CopyIcon size={16} />,
-                onSelect: async () => {
-                  const r = await run({
-                    type: 'duplicatePage',
-                    workspaceId: workspace.id,
-                    id: pageId,
-                    title: t('page.copySuffix', { title }),
-                  });
-                  if (r?.mutation.primary)
-                    navigate({
-                      name: 'page',
+      <div className={`page-cover cover-${path[0] ? entityColor(path[0].id) : 'gray'}`}>
+        <div className="page-toolbar">
+          <nav className="breadcrumb" aria-label="breadcrumb">
+            {path.slice(0, -1).map((item) => (
+              <span key={item.id}>{item.name}</span>
+            ))}
+          </nav>
+          <div className="page-actions">
+            <SaveIndicator />
+            <CopyButton
+              getText={() => pageToPlainText(registry, page.title, blocks)}
+              label={t('page.copyAll')}
+              variant="icon"
+              disabled={blocks.length === 0}
+            />
+            <MenuButton
+              label={t('page.more')}
+              items={[
+                {
+                  id: 'dup',
+                  label: t('tree.duplicate'),
+                  icon: <CopyIcon size={16} />,
+                  onSelect: async () => {
+                    const r = await run({
+                      type: 'duplicatePage',
                       workspaceId: workspace.id,
-                      pageId: r.mutation.primary.id,
+                      id: pageId,
+                      title: t('page.copySuffix', { title }),
                     });
+                    if (r?.mutation.primary)
+                      navigate({
+                        name: 'page',
+                        workspaceId: workspace.id,
+                        pageId: r.mutation.primary.id,
+                      });
+                  },
                 },
-              },
-              {
-                id: 'move',
-                label: t('tree.move'),
-                icon: <FolderInput size={16} />,
-                onSelect: () => setMoveRequest({ kind: 'page', id: pageId, name: title }),
-              },
-              {
-                id: 'trash',
-                label: t('tree.trash'),
-                icon: <Trash2 size={16} />,
-                destructive: true,
-                onSelect: async () => {
-                  if (await trash('page', pageId, title))
-                    navigate({ name: 'home' }, { replace: true });
+                {
+                  id: 'move',
+                  label: t('tree.move'),
+                  icon: <FolderInput size={16} />,
+                  onSelect: () => setMoveRequest({ kind: 'page', id: pageId, name: title }),
                 },
-              },
-            ]}
-          >
-            <MoreHorizontal size={18} aria-hidden="true" />
-          </MenuButton>
+                {
+                  id: 'trash',
+                  label: t('tree.trash'),
+                  icon: <Trash2 size={16} />,
+                  destructive: true,
+                  onSelect: async () => {
+                    if (await trash('page', pageId, title))
+                      navigate({ name: 'home' }, { replace: true });
+                  },
+                },
+              ]}
+            >
+              <MoreHorizontal size={18} aria-hidden="true" />
+            </MenuButton>
+          </div>
         </div>
-      </div>
 
-      <PageTitle
-        key={page.id}
-        page={page}
-        autoFocus={blocks.length === 0 && page.title === ''}
-        onEnter={() => {
-          if (blocks.length === 0) void insert('richText', { kind: 'start' });
-        }}
-      />
+        <PageTitle
+          color={path[0] ? entityColor(path[0].id) : undefined}
+          key={page.id}
+          page={page}
+          autoFocus={blocks.length === 0 && page.title === ''}
+          onEnter={() => {
+            if (blocks.length === 0) void insert('richText', { kind: 'start' });
+          }}
+        />
+      </div>
 
       {blocksData && blocks.length === 0 && <p className="muted page-empty">{t('page.empty')}</p>}
 

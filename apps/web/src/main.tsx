@@ -16,6 +16,7 @@ import { I18nProvider, createI18n, type UiLocale } from './i18n';
 import './styles/tokens.css';
 import './styles/prosemirror.css';
 import './styles/app.css';
+import './styles/features.css';
 
 const LOCALE_KEY = 'panoya:locale';
 

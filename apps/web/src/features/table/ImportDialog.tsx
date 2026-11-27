@@ -1,3 +1,4 @@
+import { ListChecks, Table2, Wallet } from 'lucide-react';
 import { useId, useMemo, useRef, useState } from 'react';
 import {
   buildImport,
@@ -13,8 +14,14 @@ import { useRunCommand, useServices } from '../../app/services';
 import { BusyNote } from '../../components/BusyNote';
 import { Dialog } from '../../components/Dialog';
 import { useI18n } from '../../i18n';
-import { presetOptions } from './ColumnDialog';
 import { ColumnTypeOptions } from './ColumnTypeOptions';
+import {
+  MANUAL_SOURCE,
+  trackerTemplate,
+  walletCurrency,
+  walletTemplate,
+  type TableTemplate,
+} from './templates';
 
 const PREVIEW_ROWS = 8;
 
@@ -99,38 +106,16 @@ export function ImportDialog({ open, pageId, placement, onClose, onCreated }: Pr
     onClose();
   };
 
-  /** Ready-made status-tracking table: title, status (with history), note, date. */
-  const createTracker = async () => {
+  /** One-click templates: tracker (status with history) or wallet (income/expense + stats). */
+  const createFrom = async (template: TableTemplate) => {
     setBusy(true);
     const result = await run({
       type: 'createTableBlock',
       workspaceId: workspace.id,
       pageId,
       placement,
-      title: t('table.tracker.title'),
-      columns: [
-        { id: 'c1', label: t('table.tracker.item'), type: 'text', unit: null, currency: null },
-        {
-          id: 'c2',
-          label: t('table.tracker.status'),
-          type: 'select',
-          unit: null,
-          currency: null,
-          options: presetOptions('task', t),
-          trackHistory: true,
-        },
-        { id: 'c3', label: t('table.tracker.note'), type: 'text', unit: null, currency: null },
-        { id: 'c4', label: t('table.tracker.date'), type: 'date', unit: null, currency: null },
-      ],
-      rows: [{ cells: {} }, { cells: {} }, { cells: {} }],
-      source: {
-        kind: 'manual',
-        filename: null,
-        delimiter: null,
-        locale: null,
-        importedAt: null,
-        original: null,
-      },
+      ...template,
+      source: MANUAL_SOURCE,
     });
     setBusy(false);
     if (result?.mutation.primary) {
@@ -211,33 +196,68 @@ export function ImportDialog({ open, pageId, placement, onClose, onCreated }: Pr
       onClose={close}
       footer={
         <>
-          {!preview && (
-            <button
-              type="button"
-              className="btn btn-ghost footer-start"
-              disabled={busy}
-              onClick={() => void createTracker()}
-            >
-              {t('table.tracker.create')}
-            </button>
-          )}
           <button type="button" className="btn btn-ghost" onClick={close}>
             {t('dialog.cancel')}
           </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={!canCreate}
-            onClick={() => void create()}
-          >
-            {preview
-              ? t('table.import.create', { rows: preview.body.length })
-              : t('table.import.createEmpty')}
-          </button>
+          {preview && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={!canCreate}
+              onClick={() => void create()}
+            >
+              {t('table.import.create', { rows: preview.body.length })}
+            </button>
+          )}
         </>
       }
     >
-      <p className="muted">{t('table.import.hint')}</p>
+      {!preview && (
+        <div className="template-grid" role="group" aria-label={t('table.templates')}>
+          <button
+            type="button"
+            className="template-card tint-gray"
+            aria-label={t('table.import.createEmpty')}
+            disabled={busy}
+            onClick={() => void create()}
+          >
+            <span className="template-icon" aria-hidden="true">
+              <Table2 size={20} />
+            </span>
+            <span className="template-name">{t('table.template.empty')}</span>
+            <span className="template-desc">{t('table.template.emptyDesc')}</span>
+          </button>
+          <button
+            type="button"
+            className="template-card tint-blue"
+            aria-label={t('table.tracker.create')}
+            disabled={busy}
+            onClick={() => void createFrom(trackerTemplate(t))}
+          >
+            <span className="template-icon" aria-hidden="true">
+              <ListChecks size={20} />
+            </span>
+            <span className="template-name">{t('table.template.tracker')}</span>
+            <span className="template-desc">{t('table.template.trackerDesc')}</span>
+          </button>
+          <button
+            type="button"
+            className="template-card tint-green"
+            aria-label={t('wallet.create')}
+            disabled={busy}
+            onClick={() =>
+              void createFrom(walletTemplate(t, walletCurrency(locale, workspace.baseCurrency)))
+            }
+          >
+            <span className="template-icon" aria-hidden="true">
+              <Wallet size={20} />
+            </span>
+            <span className="template-name">{t('wallet.title')}</span>
+            <span className="template-desc">{t('table.template.walletDesc')}</span>
+          </button>
+        </div>
+      )}
+      <p className="muted import-or">{t('table.import.hint')}</p>
       <BusyNote active={busy} label={t('busy.creatingTable')} />
       <label htmlFor={ids.text} className="sr-only">
         {t('table.import.paste')}
@@ -299,12 +319,17 @@ export function ImportDialog({ open, pageId, placement, onClose, onCreated }: Pr
             >
               <option value="auto">
                 {t('table.import.auto', {
-                  found: preview.delimiter === '\t' ? 'Tab' : preview.delimiter,
+                  found:
+                    preview.delimiter === '\t'
+                      ? t('table.import.delimTab')
+                      : preview.delimiter === ';'
+                        ? t('table.import.delimSemicolon')
+                        : t('table.import.delimComma'),
                 })}
               </option>
-              <option value=",">,</option>
-              <option value=";">;</option>
-              <option value={'\t'}>Tab</option>
+              <option value=",">{t('table.import.delimComma')}</option>
+              <option value=";">{t('table.import.delimSemicolon')}</option>
+              <option value={'\t'}>{t('table.import.delimTab')}</option>
             </select>
             <label htmlFor={ids.locale}>{t('table.import.numbers')}</label>
             <select
@@ -313,8 +338,8 @@ export function ImportDialog({ open, pageId, placement, onClose, onCreated }: Pr
               value={numberLocale}
               onChange={(e) => setNumberLocale(e.target.value as DataLocale)}
             >
-              <option value="tr-TR">1.234,56 (tr-TR)</option>
-              <option value="en-US">1,234.56 (en-US)</option>
+              <option value="tr-TR">{t('table.import.fmtTr')}</option>
+              <option value="en-US">{t('table.import.fmtEn')}</option>
             </select>
             <label className="check-row">
               <input

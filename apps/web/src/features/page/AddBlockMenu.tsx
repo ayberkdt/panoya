@@ -2,7 +2,7 @@ import { Plus } from 'lucide-react';
 import { useId, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useI18n, type MessageKey } from '../../i18n';
 import { DEFAULT_PLACEMENT, placeMenu, type Placement } from '../../components/menuPlacement';
-import { blockUis } from '../blocks/catalog';
+import { pickerItems } from '../blocks/catalog';
 import { foldText } from '../../app/text';
 
 interface Props {
@@ -30,7 +30,7 @@ export function AddBlockMenu({ open, onOpenChange, onPick, showButton = true }: 
 
   const results = useMemo(() => {
     const q = foldText(query.trim());
-    return blockUis.filter(
+    return pickerItems.filter(
       (b) => !q || foldText(`${t(b.label)} ${t(b.synonyms)} ${t(descKey(b.label))}`).includes(q),
     );
   }, [query, t]);
@@ -126,7 +126,7 @@ export function AddBlockMenu({ open, onOpenChange, onPick, showButton = true }: 
                         onPointerEnter={() => setActive(index)}
                         onClick={() => pick(item.type)}
                       >
-                        <span className="picker-icon" aria-hidden="true">
+                        <span className={`picker-icon opt-${item.tint}`} aria-hidden="true">
                           <Icon size={16} />
                         </span>
                         <span className="picker-text">

@@ -156,20 +156,26 @@ export function Sidebar({
               onNavigate();
             }}
           >
-            <Home size={16} aria-hidden="true" />
+            <span className="nav-icon opt-green" aria-hidden="true">
+              <Home size={15} />
+            </span>
             <span>{t('nav.home')}</span>
           </button>
         </li>
         <li>
           <button type="button" className="nav-item" onClick={onSearch}>
-            <Search size={16} aria-hidden="true" />
+            <span className="nav-icon opt-blue" aria-hidden="true">
+              <Search size={15} />
+            </span>
             <span>{t('nav.search')}</span>
             <kbd className="kbd">{t('palette.hint')}</kbd>
           </button>
         </li>
         <li>
           <button type="button" className="nav-item" onClick={onOpenInbox}>
-            <Inbox size={16} aria-hidden="true" />
+            <span className="nav-icon opt-purple" aria-hidden="true">
+              <Inbox size={15} />
+            </span>
             <span>{t('nav.inbox')}</span>
           </button>
         </li>
@@ -183,7 +189,9 @@ export function Sidebar({
               onNavigate();
             }}
           >
-            <Trash2 size={16} aria-hidden="true" />
+            <span className="nav-icon opt-gray" aria-hidden="true">
+              <Trash2 size={15} />
+            </span>
             <span>{t('nav.trash')}</span>
           </button>
         </li>

@@ -109,3 +109,26 @@ Regression tests added for the fixed behaviour: `tests/e2e/ui.spec.ts` (picker f
 | Messages over 20 words                                                | 1      | 1     |
 
 The metric found two inconsistencies introduced during this pass ("Filtreyi kaldır" next to "Süz:"/"süzgeç"; "eksik hücreler" next to "boş hücre"); both fixed before these numbers were taken.
+
+## Session log — 2026-11-27 (v3: wallet, statistics, colour, search)
+
+- **Changes:** wallet template and block-picker shortcut with automatic statistics (balance, income, spending, this month, per category, last six months) and an entry form; totals/average/range under number columns; table dialog with template cards; visible "add column" button, row-open icon, choice and yes/no cells open on the first click (every cell on touch); link cards with a large "Aç" button; search with colour type tiles and six scope chips (no query syntax shown; scope resets on close); colour tiles for block types, sidebar navigation, folders and notebooks; sample wallet in the demo; plain-language backup/import/search messages (ADR-009).
+- **Bugs found and fixed while verifying:** search scope stayed on "Linkler" after closing; typed filter errors were swallowed when nothing else remained in the query; KPI tiles lost their colour (CSS order); month labels overflowed; plain numbers in statistics had no thousands separator; demo said "Finans blokları G5 aşamasında gelecek".
+- **Commands:** `corepack pnpm check` → 0 (contrast 62/62, eslint, tsc ×6, vitest 176/176 incl. `stats.test.ts` exact decimals and wallet detection, build) · `corepack pnpm e2e:prod` → 29 passed · desktop E2E 27 passed in two consecutive full runs · new `tests/e2e/wallet.spec.ts` (6 tests) · UX auditor on 12 live-DOM snapshots (desktop light/dark, phone) → 0 HATA; UYARI: sidebar tree, 15-row grid, six search chips and three template cards (one decision each) · datawiz: palette check income/spending 0 HATA (greyscale UYARI → signs and labels), `dw.grafik` + `dw.kaydet` for both wallet charts → 0 HATA · 0 UYARI · metinoskop `--teslim` → TESLİM.
+- **Unverified:** physical phones; very large wallets (performance measured only with the 15-entry sample).
+
+### v3 measurements (same scripts on the last pushed commit 823650f and this tree)
+
+| Measure                                                                 | Before (823650f) | After     |
+| ----------------------------------------------------------------------- | ---------------- | --------- |
+| Colourful pixels, links page (OKLab chroma ≥ 0.04)                      | 1.8 %            | 12.9 %    |
+| Colourful pixels, search                                                | 1.2 %            | 9.7 %     |
+| Colourful pixels, home                                                  | 2.0 %            | 13.8 %    |
+| Hue families on screen (30° bins ≥ 0.3 %), links / search / home        | 1 / 1 / 1        | 3 / 3 / 4 |
+| Search: Enter before the result exists → wrong page (10 runs, 6 s wait) | 6 of 8           | 0 of 9    |
+
+- **T02 cause confirmed by experiment:** Enter pressed before the search hit existed did nothing (6 of 8 such runs stayed on the previous page on the old build, CPU throttled ×6 in half the runs). The palette now remembers that Enter and opens the first result when it arrives; the test also waits for the hit.
+- **Colour:** first pass (tints and icons only) moved the links page from 1.8 % to 2.9 % and stayed one hue family, so it was not enough; folder colours (stable per folder, `app/colors.ts`), a cover band in the folder's tint on every page, a time-of-day cover on home and richer tile tints (contrast gate 62/62) produced the numbers above.
+- **Wallet with 2,000 entries (production build):** CPU ×1 — reopen 0.46 s, add entry 0.92 s with "Ekleniyor…" after 44 ms and a confirmation toast, open search 0.05 s, paste of 2,000 rows 2.8 s with the busy note at 0.96 s. CPU ×4 — reopen 2.3 s, add entry 3.8 s (feedback 0.48 s incl. test tooling), open search 0.56 s, paste 15 s. Changes from these runs: one `Intl` formatter per locale instead of per cell (no measurable gain: the profile showed the time is storage wait, ~750 ms idle of 886 ms), first 50 rows drawn instead of 200, saving state + toast in the entry form, busy note for large pastes.
+- **Row appends fixed (planner):** appending N rows read every sibling N times (`allocateRank` per row), O(N²) for a paste. Now one read per command and ranks from one `ranksBetween` call (`allocateRanks`, rebalance fallback kept). The first version broke large pastes in the browser only: 2,000 non-database awaits in the loop let the IndexedDB transaction commit early (Dexie `PrematureCommitError`, shown as "İşlem yapılamadı."); the in-memory unit test could not see it. Ids are now created without await, and `tests/e2e/wallet.spec.ts` pastes 1,000 rows into real IndexedDB. Measured, production build, 2,000 entries: paste 2.8 s → 1.3 s (×1) and 15 s → 9.4 s (×4); one entry ×4 3.8 s → 2.9 s, feedback 0.48 s → 0.34 s.
+- **Still open:** one entry still reads the table's rows once (limit check and last rank), so it grows with table size; making it constant needs count/last-rank queries in the storage read context.

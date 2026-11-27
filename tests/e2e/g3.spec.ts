@@ -124,7 +124,7 @@ test.describe('G3 tables', () => {
     await page.getByRole('button', { name: 'Tablo işlemleri' }).click();
     await page.getByRole('menuitem', { name: 'CSV olarak indir', exact: true }).click();
     // Check the toast while it is up; waiting for the file first raced its lifetime.
-    await expect(page.getByText('Formül gibi başlayan 1 hücrenin')).toBeVisible();
+    await expect(page.getByText('= ile başlayan 1 hücre')).toBeVisible();
     const file = await (await download).path();
     const text = readFileSync(file, 'utf8');
     expect(text).toContain(`"'=HYPERLINK(""x"")";-5`);
@@ -154,10 +154,8 @@ test.describe('G3 backup', () => {
     await page.getByRole('menuitem', { name: 'Yedekten geri yükle…' }).click();
     const dialog = page.getByRole('dialog', { name: 'Yedekten geri yükle…' });
     await dialog.locator('input[type="file"]').setInputFiles(zipPath);
-    await expect(
-      dialog.getByText('Sağlama toplamları ve kayıt şemaları doğrulandı.'),
-    ).toBeVisible();
-    await expect(dialog.getByText(/1 tablo/)).toBeVisible();
+    await expect(dialog.getByText('Yedek eksiksiz ve bozulmamış.')).toBeVisible();
+    await expect(dialog.getByText(/2 tablo/)).toBeVisible();
     await dialog.getByRole('button', { name: 'Yeni çalışma alanı olarak geri yükle' }).click();
 
     // The app reloads into the restored workspace.
@@ -184,7 +182,9 @@ test.describe('G3 backup', () => {
       mimeType: 'application/zip',
       buffer: Buffer.from('not a zip'),
     });
-    await expect(dialog.getByRole('alert')).toHaveText('Dosya ZIP değil ya da bozuk.');
+    await expect(dialog.getByRole('alert')).toHaveText(
+      'Bu bir yedek dosyası değil ya da dosya bozuk.',
+    );
     await expect(
       dialog.getByRole('button', { name: 'Yeni çalışma alanı olarak geri yükle' }),
     ).toBeDisabled();

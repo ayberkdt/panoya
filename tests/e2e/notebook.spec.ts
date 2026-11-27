@@ -61,6 +61,8 @@ test.describe('G2 notebook flows', () => {
     await loadDemo(page);
     await page.getByRole('button', { name: 'Ara' }).first().click();
     await page.getByRole('combobox', { name: 'Sayfa ara ya da komut yaz…' }).fill('proje');
+    // the search index updates after the demo is added; Enter before the hit shows does nothing
+    await expect(page.getByRole('option', { name: /Proje desteği/ }).first()).toBeVisible();
     await page.keyboard.press('Enter');
     await expect(page.locator('#page-title')).toHaveValue('Proje desteği');
 

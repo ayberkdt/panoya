@@ -1,6 +1,8 @@
 import { docFromText } from '@panoya/blocks';
 import type { DomainCommand, Workspace } from '@panoya/domain';
 import type { WorkspaceStore } from '@panoya/storage';
+import { tr, type MessageKey } from '../../i18n/tr';
+import { MANUAL_SOURCE, WALLET_IDS, localToday, walletTemplate } from '../table/templates';
 
 /**
  * Synthetic demo content from spec 23 (opt-in only). URLs use the non-resolving example.invalid
@@ -69,9 +71,16 @@ export async function createDemo(store: WorkspaceStore, workspace: Workspace): P
 
   const finance = await folder('Finans');
   const assets = await notebook(finance, 'Varlıklarım');
-  await page(assets, 'Kasım örneği', [
-    text('Örnek: 300 EUR nakit, 200 EUR banka. (Finans blokları G5 aşamasında gelecek.)'),
-  ]);
+  const walletPage = await page(assets, 'Cüzdan');
+  await exec({
+    type: 'createTableBlock',
+    workspaceId: ws,
+    pageId: walletPage,
+    placement: { kind: 'end' },
+    ...walletTemplate((k: MessageKey) => tr[k], 'TRY'),
+    rows: demoWalletRows(localToday()),
+    source: MANUAL_SOURCE,
+  });
   const travel = await notebook(finance, 'Seyahat');
   await page(travel, 'Bütçe', [text('Seyahat bütçesi: 320 EUR')]);
 
@@ -96,4 +105,49 @@ export async function createDemo(store: WorkspaceStore, workspace: Workspace): P
     },
   ]);
   return firstPage;
+}
+
+/** Sample wallet entries spread over this month and the two before it (relative to today). */
+function demoWalletRows(today: string) {
+  const ym = (back: number) => {
+    const d = new Date(
+      Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1 - back, 1),
+    );
+    return d.toISOString().slice(0, 7);
+  };
+  const day = Math.min(Number(today.slice(8, 10)), 28);
+  const on = (back: number, d: number) =>
+    `${ym(back)}-${String(Math.min(d, back === 0 ? day : 28)).padStart(2, '0')}`;
+  const entry = (
+    date: string,
+    note: string,
+    category: string,
+    flow: 'in' | 'out',
+    amount: string,
+  ) => ({
+    cells: {
+      [WALLET_IDS.date]: { kind: 'date' as const, value: date },
+      [WALLET_IDS.note]: { kind: 'text' as const, value: note },
+      [WALLET_IDS.category]: { kind: 'select' as const, optionId: category },
+      [WALLET_IDS.flow]: { kind: 'select' as const, optionId: flow },
+      [WALLET_IDS.amount]: { kind: 'money' as const, amount, currency: 'TRY' },
+    },
+  });
+  return [
+    entry(on(2, 1), 'Maaş', 'salary', 'in', '42000'),
+    entry(on(2, 3), 'Kira', 'rent', 'out', '15000'),
+    entry(on(2, 9), 'Market', 'market', 'out', '4120.30'),
+    entry(on(2, 15), 'Elektrik ve su', 'bills', 'out', '1310.75'),
+    entry(on(1, 1), 'Maaş', 'salary', 'in', '42000'),
+    entry(on(1, 3), 'Kira', 'rent', 'out', '15000'),
+    entry(on(1, 12), 'Uçak bileti', 'transport', 'out', '6890'),
+    entry(on(1, 18), 'Market', 'market', 'out', '3875.60'),
+    entry(on(1, 22), 'Konser', 'fun', 'out', '2400'),
+    entry(on(1, 25), 'Faturalar', 'bills', 'out', '1420.10'),
+    entry(on(0, 1), 'Maaş', 'salary', 'in', '42000'),
+    entry(on(0, 2), 'Kira', 'rent', 'out', '15000'),
+    entry(on(0, 4), 'Haftalık market', 'market', 'out', '1650.40'),
+    entry(on(0, 6), 'Akbil yükleme', 'transport', 'out', '600'),
+    entry(on(0, 8), 'İnternet', 'bills', 'out', '549.90'),
+  ];
 }

@@ -63,6 +63,40 @@ async function createTable(
 }
 
 describe('datasets', () => {
+  it('appends many rows in order with one sibling read per command (paste and wallet entries)', async () => {
+    const { datasetId } = await createTable();
+    const before = await store.getRows(datasetId);
+    await store.execute({
+      type: 'updateCells',
+      workspaceId: ws,
+      datasetId,
+      edits: [],
+      appendRows: Array.from({ length: 500 }, (_, i) => ({ cells: { label: text(`r${i}`) } })),
+    });
+    const rows = await store.getRows(datasetId);
+    expect(rows).toHaveLength(502);
+    // existing rows stay first; new rows keep their pasted order; ranks strictly increase
+    expect(rows.slice(0, 2).map((r) => r.id)).toEqual(before.map((r) => r.id));
+    expect(rows.slice(2).map((r) => (r.cells.label as { value: string }).value)).toEqual(
+      Array.from({ length: 500 }, (_, i) => `r${i}`),
+    );
+    const ranks = rows.map((r) => r.rank);
+    expect(ranks.every((rank, i) => i === 0 || ranks[i - 1]! < rank)).toBe(true);
+
+    // a block of rows placed after the first row lands between row 1 and row 2, in order
+    await store.execute({
+      type: 'addDatasetRows',
+      workspaceId: ws,
+      datasetId,
+      placement: { kind: 'after', id: before[0]!.id },
+      rows: [{ cells: { label: text('a') } }, { cells: { label: text('b') } }],
+    });
+    const after = await store.getRows(datasetId);
+    expect(
+      after.slice(0, 4).map((r) => (r.cells.label as { value: string } | undefined)?.value),
+    ).toEqual(['bir', 'a', 'b', 'sıfır']);
+  });
+
   it('creates dataset + rows + table block atomically; missing stays distinct from 0', async () => {
     const { datasetId } = await createTable();
     const rows = await store.getRows(datasetId);

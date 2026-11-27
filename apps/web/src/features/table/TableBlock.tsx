@@ -9,6 +9,7 @@ import {
   FileDown,
   Hash,
   Link2,
+  Maximize2,
   Plus,
   SlidersHorizontal,
   SquareCheck,
@@ -20,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
 import {
+  detectWallet,
   exportDataset,
   formatCell,
   parseCell,
@@ -35,6 +37,7 @@ import {
   type DatasetRow,
 } from '@panoya/domain';
 import { useRunCommand, useServices, useStoreQuery } from '../../app/services';
+import { BusyNote } from '../../components/BusyNote';
 import { CopyButton, useCopy } from '../../components/Copy';
 import { MenuButton } from '../../components/Menu';
 import { useToast } from '../../components/Toasts';
@@ -44,6 +47,7 @@ import { CellEditor } from './CellEditor';
 import { ColumnDialog, type ColumnDialogState } from './ColumnDialog';
 import { OptionBadge } from './OptionBadge';
 import { RowDialog } from './RowDialog';
+import { NumberStats, WalletPanel } from './TableStats';
 import {
   columnTypeKey,
   downloadText,
@@ -56,7 +60,8 @@ import {
   type SortSpec,
 } from './tableUtils';
 
-const PAGE = 200;
+/** Rows drawn at first; more on request. 50 keeps a 2,000-row wallet responsive on slow phones. */
+const PAGE = 50;
 
 /** The column type is shown, not asked: one icon before the header label. */
 const typeIcon: Record<DatasetColumn['type'], LucideIcon> = {
@@ -98,6 +103,20 @@ export function TableBlock({ block, payload }: BlockViewProps<TablePayload>) {
     [datasetId],
   );
   const [focus, setFocus] = useState<{ r: number; c: number }>({ r: 0, c: 0 });
+  // One formatter per locale, not one per cell: 200 rows × money and date columns would otherwise
+  // build hundreds of Intl objects on every render (measured: slow entry on a 2,000-row wallet).
+  const formatters = useMemo(
+    () => ({
+      money: new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      date: new Intl.DateTimeFormat(locale, {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        timeZone: 'UTC',
+      }),
+    }),
+    [locale],
+  );
   const [editing, setEditing] = useState<{
     rowId: string;
     columnId: string;
@@ -106,6 +125,8 @@ export function TableBlock({ block, payload }: BlockViewProps<TablePayload>) {
   const [limit, setLimit] = useState(PAGE);
   const [rowDialog, setRowDialog] = useState<string | null>(null);
   const [columnDialog, setColumnDialog] = useState<ColumnDialogState | null>(null);
+  /** A large paste can take seconds; BusyNote shows after 400 ms (delayed feedback pattern). */
+  const [pasting, setPasting] = useState(false);
   const gridRef = useRef<HTMLTableElement>(null);
   const wasFocused = useRef(false);
   /** Bumped by every programmatic move and every pointer press; a stale move is dropped. */
@@ -126,6 +147,7 @@ export function TableBlock({ block, payload }: BlockViewProps<TablePayload>) {
   }
 
   const columns = dataset.columns;
+  const wallet = detectWallet(columns);
   const visible = rows.slice(0, limit);
   const missingCount = rows.reduce(
     (n, r) => n + columns.filter((c) => r.cells[c.id] === undefined).length,
@@ -291,7 +313,9 @@ export function TableBlock({ block, payload }: BlockViewProps<TablePayload>) {
       return;
     }
     if (edits.length || appendRows.length) {
+      setPasting(true);
       await run({ type: 'updateCells', workspaceId: workspace.id, datasetId, edits, appendRows });
+      setPasting(false);
     }
   };
 
@@ -323,8 +347,10 @@ export function TableBlock({ block, payload }: BlockViewProps<TablePayload>) {
       return option ? <OptionBadge label={option.label} color={option.color} /> : '—';
     }
     // Money shows the amount only; the currency is written once in the header (T12).
-    if (cell.kind === 'money')
-      return formatCell({ kind: 'decimal', value: cell.amount }, dataLocale);
+    // Display only: amounts grouped with two decimals (currency is in the header), dates in the
+    // reader's format instead of the stored YYYY-MM-DD. Editing and export keep the exact value.
+    if (cell.kind === 'money') return formatters.money.format(Number(cell.amount));
+    if (cell.kind === 'date') return formatters.date.format(new Date(`${cell.value}T00:00:00Z`));
     return formatCell(cell, dataLocale, column);
   };
 
@@ -366,6 +392,8 @@ export function TableBlock({ block, payload }: BlockViewProps<TablePayload>) {
           </MenuButton>
         </div>
       </div>
+
+      {wallet && <WalletPanel dataset={dataset} rows={allRows} roles={wallet} />}
 
       {selectColumns.map((column) => (
         <div
@@ -413,6 +441,7 @@ export function TableBlock({ block, payload }: BlockViewProps<TablePayload>) {
         </p>
       )}
 
+      <BusyNote active={pasting} label={t('busy.pasting')} />
       <div className="table-frame">
         <div
           className="table-scroll"
@@ -472,6 +501,17 @@ export function TableBlock({ block, payload }: BlockViewProps<TablePayload>) {
                     </th>
                   );
                 })}
+                <th scope="col" className="col-add">
+                  <button
+                    type="button"
+                    className="col-add-btn"
+                    aria-label={t('table.addColumn')}
+                    title={t('table.addColumn')}
+                    onClick={() => setColumnDialog({ mode: 'add' })}
+                  >
+                    <Plus size={16} aria-hidden="true" />
+                  </button>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -484,7 +524,8 @@ export function TableBlock({ block, payload }: BlockViewProps<TablePayload>) {
                       aria-label={t('table.editRow', { n: r + 1 })}
                       onClick={() => setRowDialog(row.id)}
                     >
-                      {r + 1}
+                      <span className="row-num-n">{r + 1}</span>
+                      <Maximize2 size={14} aria-hidden="true" className="row-num-open" />
                     </button>
                   </th>
                   {columns.map((column, c) => {
@@ -505,7 +546,14 @@ export function TableBlock({ block, payload }: BlockViewProps<TablePayload>) {
                         }}
                         onDoubleClick={() => setEditing({ rowId: row.id, columnId: column.id })}
                         onClick={() => {
-                          if (wasFocused.current && !isEditing)
+                          if (isEditing) return;
+                          // Choices and yes/no open on the first click; on touch screens every
+                          // cell does (a second tap to edit is hard to discover).
+                          const direct =
+                            column.type === 'select' ||
+                            column.type === 'boolean' ||
+                            window.matchMedia('(pointer: coarse)').matches;
+                          if (direct || wasFocused.current)
                             setEditing({ rowId: row.id, columnId: column.id });
                         }}
                       >
@@ -531,6 +579,7 @@ export function TableBlock({ block, payload }: BlockViewProps<TablePayload>) {
                       </td>
                     );
                   })}
+                  <td className="col-add" aria-hidden="true" />
                 </tr>
               ))}
             </tbody>
@@ -561,6 +610,8 @@ export function TableBlock({ block, payload }: BlockViewProps<TablePayload>) {
           </button>
         )}
       </div>
+
+      {!wallet && <NumberStats columns={columns} rows={rows} locale={dataLocale} />}
 
       {rowDialog && (
         <RowDialog

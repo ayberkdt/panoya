@@ -1,6 +1,7 @@
 import { ExternalLink, Pencil } from 'lucide-react';
 import { useId, useState } from 'react';
 import { checkUrl, linkDisplayTitle, type LinkPayload, type UrlProblem } from '@panoya/blocks';
+import { entityColor } from '../../app/colors';
 import { CopyButton } from '../../components/Copy';
 import { useI18n, type MessageKey } from '../../i18n';
 import type { BlockViewProps } from './types';
@@ -38,7 +39,7 @@ export function LinkBlock({ block, payload, autoFocus }: BlockViewProps<LinkPayl
     return (
       <div className="link-block">
         {/* Initial of the site, no network request for a favicon (privacy, CSP). */}
-        <span className="link-favicon" aria-hidden="true">
+        <span className={`link-favicon opt-${entityColor(check.host)}`} aria-hidden="true">
           {(check.host.replace(/^www\./, '')[0] ?? '·').toLocaleUpperCase()}
         </span>
         <div className="link-main">
@@ -63,6 +64,17 @@ export function LinkBlock({ block, payload, autoFocus }: BlockViewProps<LinkPayl
           </div>
           {value.description && <p className="link-desc">{value.description}</p>}
         </div>
+        {/* The point of a saved link is going there: one large, always visible target. */}
+        <a
+          className="btn link-open"
+          href={check.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={t('link.open', { host: check.host })}
+        >
+          <ExternalLink size={18} aria-hidden="true" />
+          <span>{t('link.go')}</span>
+        </a>
         <div className="block-actions">
           <CopyButton getText={() => draft.value.url} label={t('link.copyUrl')} variant="icon" />
           <button

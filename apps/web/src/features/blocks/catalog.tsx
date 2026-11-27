@@ -8,10 +8,12 @@ import {
   Minus,
   Table,
   Type,
+  Wallet,
   type LucideIcon,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import type { BlockCategory } from '@panoya/blocks';
+import type { OptionColor } from '@panoya/domain';
 import type { MessageKey } from '../../i18n';
 import { LinkBlock } from './LinkBlock';
 import { MailDraftBlock } from './MailDraftBlock';
@@ -27,6 +29,8 @@ export interface BlockUi {
   synonyms: MessageKey;
   category: BlockCategory;
   icon: LucideIcon;
+  /** Colour of the type's icon tile (measured option-badge tokens, never the accent). */
+  tint: OptionColor;
   // Each view validates its own payload type through the registry before rendering.
   View: ComponentType<BlockViewProps<never>>;
 }
@@ -42,6 +46,7 @@ export const blockUis: BlockUi[] = [
     synonyms: 'blockSynonyms.richText',
     category: 'text',
     icon: Type,
+    tint: 'gray',
     View: RichTextBlock as never,
   },
   {
@@ -50,6 +55,7 @@ export const blockUis: BlockUi[] = [
     synonyms: 'blockSynonyms.heading',
     category: 'text',
     icon: Heading2,
+    tint: 'gray',
     View: HeadingBlock as never,
   },
   {
@@ -58,6 +64,7 @@ export const blockUis: BlockUi[] = [
     synonyms: 'blockSynonyms.code',
     category: 'text',
     icon: Code2,
+    tint: 'brown',
     View: CodeBlock as never,
   },
   {
@@ -66,6 +73,7 @@ export const blockUis: BlockUi[] = [
     synonyms: 'blockSynonyms.divider',
     category: 'text',
     icon: Minus,
+    tint: 'gray',
     View: DividerBlock as never,
   },
   {
@@ -74,6 +82,7 @@ export const blockUis: BlockUi[] = [
     synonyms: 'blockSynonyms.link',
     category: 'productivity',
     icon: Link2,
+    tint: 'blue',
     View: LinkBlock as never,
   },
   {
@@ -82,6 +91,7 @@ export const blockUis: BlockUi[] = [
     synonyms: 'blockSynonyms.quickCopy',
     category: 'productivity',
     icon: ClipboardCopy,
+    tint: 'yellow',
     View: QuickCopyBlock as never,
   },
   {
@@ -90,6 +100,7 @@ export const blockUis: BlockUi[] = [
     synonyms: 'blockSynonyms.mailDraft',
     category: 'productivity',
     icon: Mail,
+    tint: 'pink',
     View: MailDraftBlock as never,
   },
   {
@@ -98,6 +109,7 @@ export const blockUis: BlockUi[] = [
     synonyms: 'blockSynonyms.checklist',
     category: 'productivity',
     icon: CheckSquare,
+    tint: 'purple',
     View: ChecklistBlock as never,
   },
   {
@@ -106,8 +118,32 @@ export const blockUis: BlockUi[] = [
     synonyms: 'blockSynonyms.table',
     category: 'data',
     icon: Table,
+    tint: 'orange',
     View: TableBlock as never,
   },
 ];
+
+/** Picker entries that create a ready-made block instead of a new type (no view of their own). */
+export type PickerItem = Pick<
+  BlockUi,
+  'type' | 'label' | 'synonyms' | 'category' | 'icon' | 'tint'
+>;
+
+export const pickerShortcuts: PickerItem[] = [
+  {
+    type: 'wallet',
+    label: 'blockType.wallet',
+    synonyms: 'blockSynonyms.wallet',
+    category: 'data',
+    icon: Wallet,
+    tint: 'green',
+  },
+];
+
+export const pickerItems: PickerItem[] = [...blockUis, ...pickerShortcuts];
+
+/** Icon tile colour for a block type (search results, recent pages). */
+export const tintOf = (type: string): OptionColor =>
+  pickerItems.find((b) => b.type === type)?.tint ?? 'gray';
 
 export const blockUiByType = new Map(blockUis.map((b) => [b.type, b]));

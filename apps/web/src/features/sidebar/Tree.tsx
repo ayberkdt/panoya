@@ -11,6 +11,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { entityColor } from '../../app/colors';
 import { displayNameOf, type TreeNode } from '@panoya/domain';
 import { useTrash } from '../../app/actions';
 import { navigate } from '../../app/router';
@@ -307,7 +308,11 @@ function TreeItem({
             }}
             onDoubleClick={() => setRenamingId(id)}
           >
-            <Icon size={16} aria-hidden="true" className="tree-icon" />
+            <Icon
+              size={16}
+              aria-hidden="true"
+              className={`tree-icon tree-icon-${node.kind}${node.kind === 'page' ? '' : ` ink-${entityColor(node.entity.id)}`}`}
+            />
             <span className="tree-name">{name}</span>
           </button>
         )}

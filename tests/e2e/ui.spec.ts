@@ -59,7 +59,7 @@ test.describe('interface regressions (visual identity v2)', () => {
     await loadDemo(page);
     await page.getByRole('button', { name: 'Blok ekle' }).click();
     const descriptions = page.locator('.picker-desc');
-    await expect(descriptions).toHaveCount(9);
+    await expect(descriptions).toHaveCount(10);
     for (const text of await descriptions.allTextContents())
       expect(text.trim().length).toBeGreaterThan(5);
   });

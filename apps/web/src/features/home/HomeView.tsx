@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { navigate } from '../../app/router';
 import { useServices } from '../../app/services';
 import { useWorkspaceIndex } from '../../app/workspaceData';
+import { entityColor } from '../../app/colors';
 import { useI18n } from '../../i18n';
 
 interface Props {
@@ -31,6 +32,14 @@ export function HomeView({ onCapture, onSearch, onLoadDemo }: Props) {
   // Captured once per visit: "5 minutes ago" does not need to tick.
   const [now] = useState(() => Date.now());
   const hour = new Date(now).getHours();
+  const coverColor =
+    hour >= 5 && hour < 12
+      ? 'yellow'
+      : hour >= 12 && hour < 18
+        ? 'blue'
+        : hour >= 18 && hour < 23
+          ? 'orange'
+          : 'purple';
   const greeting =
     hour >= 5 && hour < 12
       ? t('home.greeting.morning')
@@ -53,19 +62,21 @@ export function HomeView({ onCapture, onSearch, onLoadDemo }: Props) {
 
   return (
     <main className="page home" id="main" aria-labelledby="home-title">
-      <p className="eyebrow">{today}</p>
-      <h1 id="home-title" className="home-title">
-        {greeting}
-      </h1>
-      <p className="muted home-sub">
-        {pageCount === 0
-          ? t('home.subtitleEmpty')
-          : t('home.stats', {
-              pages: pageCount,
-              notebooks: live(index.notebooks),
-              folders: live(index.folders),
-            })}
-      </p>
+      <div className={`page-cover home-cover cover-${coverColor}`}>
+        <p className="eyebrow">{today}</p>
+        <h1 id="home-title" className="home-title">
+          {greeting}
+        </h1>
+        <p className="muted home-sub">
+          {pageCount === 0
+            ? t('home.subtitleEmpty')
+            : t('home.stats', {
+                pages: pageCount,
+                notebooks: live(index.notebooks),
+                folders: live(index.folders),
+              })}
+        </p>
+      </div>
 
       <div className="home-actions">
         <button type="button" className="btn btn-primary" onClick={onCapture}>
@@ -108,7 +119,10 @@ export function HomeView({ onCapture, onSearch, onLoadDemo }: Props) {
                       navigate({ name: 'page', workspaceId: workspace.id, pageId: page.id })
                     }
                   >
-                    <span className="recent-icon" aria-hidden="true">
+                    <span
+                      className={`recent-icon opt-${entityColor(index.pathTo(page.id)[0]?.id ?? page.id)}`}
+                      aria-hidden="true"
+                    >
                       <FileText size={18} />
                     </span>
                     <span className="recent-text">

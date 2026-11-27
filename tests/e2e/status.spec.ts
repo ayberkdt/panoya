@@ -26,13 +26,11 @@ test.describe('status tracking table', () => {
     await page.keyboard.press('Enter');
 
     const status = table.locator('[data-cell="0:1"]');
-    await status.click();
-    await page.keyboard.press('Enter');
+    await status.click(); // choice cells open on the first click
     await table.getByRole('combobox', { name: 'Durum' }).selectOption({ label: 'Devam ediyor' });
     await expect(status).toHaveText('Devam ediyor');
 
-    await status.click();
-    await page.keyboard.press('Enter');
+    await status.click(); // choice cells open on the first click
     await table.getByRole('combobox', { name: 'Durum' }).selectOption({ label: 'Yapıldı' });
     await expect(status.locator('.opt-badge')).toHaveText('Yapıldı');
 
