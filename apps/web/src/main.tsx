@@ -1,3 +1,5 @@
+// Must stay the first import: configures Zod before any schema is built (CSP, see the module).
+import '@panoya/domain/jitless';
 import { StrictMode, useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createDefaultRegistry } from '@panoya/blocks';
@@ -12,6 +14,7 @@ import { CopyProvider } from './components/Copy';
 import { ToastProvider } from './components/Toasts';
 import { I18nProvider, createI18n, type UiLocale } from './i18n';
 import './styles/tokens.css';
+import './styles/prosemirror.css';
 import './styles/app.css';
 
 const LOCALE_KEY = 'panoya:locale';

@@ -44,6 +44,9 @@ export default function RichTextEditor({
     content: doc,
     autofocus: 'end',
     shouldRerenderOnTransaction: false,
+    // The base ProseMirror rules live in styles/prosemirror.css: an injected <style> element
+    // would be blocked by the production CSP (style-src 'self', see vercel.json).
+    injectCSS: false,
     editorProps: {
       attributes: {
         class: 'rt-editor',

@@ -57,3 +57,11 @@ acceptance evidenced, listed items open), NOT STARTED.
 - **Commands:** `corepack pnpm check` → 0 (contrast gate 50/50 pairs, eslint 0, tsc ×6, vitest 162/162, build) · `playwright test` → 18 passed · UX auditor on live DOM → 0 HATA, 3 UYARI (sidebar tree count/density, grid header buttons — data-grid pattern).
 - **Visual check:** screenshots desktop light/dark and Pixel 7 emulation (page, drawer) reviewed; fixed: bottom-nav centre button overflow, beige row-number column on the white sheet, Ctrl+K hint on touch layouts, label baseline in bottom nav, status colours assigned by order instead of meaning.
 - **Unverified:** real phones, light/dark on iOS Safari, Segoe UI Variable fallback on non-Windows systems.
+
+## Session log — 2026-11-27 (Vercel deploy setup)
+
+- **Changes:** `vercel.json` (pnpm 12.23.0 via npx, contrast gate + Vite build, output `apps/web/dist`, SPA rewrite, strict CSP and security headers, immutable cache for `/assets/*`); `engines.node` pinned to `24.x`; Tiptap runs with `injectCSS: false` and its base rules moved to `styles/prosemirror.css`; Zod JIT probe (`Function('')`) disabled via `@panoya/domain/jitless`, imported first in `main.tsx`; `vite preview` sends the same headers (read from `vercel.json`); `corepack pnpm e2e:prod` runs the suite against the production build; new `tests/e2e/csp.spec.ts`.
+- **Found by the new test:** under `script-src 'self'` Zod 4.6.7 reported a `script-src eval` violation at schema construction (`zod/v4/core/schemas.js:1194-1196`); fixed by the jitless module.
+- **Commands:** `corepack pnpm check` → 0 (contrast 50/50, eslint, tsc ×6, vitest 162/162, build) · `corepack pnpm e2e:prod` → 19 passed (twice) · `corepack pnpm e2e` (dev) → 18 passed, 1 skipped (CSP test needs the production build).
+- **Flaky:** `status.spec.ts` "tracker template…" timed out waiting for the status select in 2 of 5 full `e2e:prod` runs (runs 2–3, built while Zod was configured too late; runs 1, 4, 5 passed; 3/3 alone). Link to the Zod change not shown; cause not found yet.
+- **Unverified:** an actual Vercel build and the response headers on a deployed URL (the per-path `Cache-Control` rule is not exercised by `vite preview`).

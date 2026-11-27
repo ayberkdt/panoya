@@ -4,7 +4,7 @@
   "type": "module",
   "packageManager": "pnpm@12.23.0",
   "engines": {
-    "node": ">=24"
+    "node": "24.x"
   },
   "scripts": {
     "dev": "node apps/web/node_modules/vite/bin/vite.js apps/web",
@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
+    "e2e:prod": "node scripts/e2e-prod.mjs",
     "check": "node scripts/check-contrast.mjs && eslint . && tsc -p packages/domain && tsc -p packages/blocks && tsc -p packages/storage && tsc -p packages/search && tsc -p packages/data && tsc -p apps/web && vitest run && node apps/web/node_modules/vite/bin/vite.js build apps/web",
     "contrast": "node scripts/check-contrast.mjs"
   },

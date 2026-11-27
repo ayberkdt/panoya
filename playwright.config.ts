@@ -6,7 +6,10 @@ import { defineConfig, devices } from '@playwright/test';
  * Chromium, or add WebKit/Firefox projects when those browsers are installed (spec 21).
  */
 const channel = process.env.PW_CHANNEL ?? 'msedge';
-const PORT = 5173; // same as `pnpm dev`; an already running dev server is reused locally
+// PW_TARGET=prod (`pnpm e2e:prod`): build, then serve dist with the Vercel headers on 4173.
+const prod = process.env.PW_TARGET === 'prod';
+const PORT = prod ? 4173 : 5173; // 5173 = `pnpm dev`; an already running dev server is reused
+const VITE = 'node apps/web/node_modules/vite/bin/vite.js';
 
 export default defineConfig({
   testDir: 'tests/e2e',
@@ -33,9 +36,12 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `node apps/web/node_modules/vite/bin/vite.js apps/web --port ${PORT} --strictPort`,
+    command: prod
+      ? `${VITE} build apps/web && ${VITE} preview apps/web --port ${PORT} --strictPort`
+      : `${VITE} apps/web --port ${PORT} --strictPort`,
     url: `http://localhost:${PORT}`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
+    // Never reuse a preview server: it could be serving an older build.
+    reuseExistingServer: !process.env.CI && !prod,
+    timeout: 120_000,
   },
 });
