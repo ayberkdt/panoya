@@ -37,6 +37,10 @@ export function LinkBlock({ block, payload, autoFocus }: BlockViewProps<LinkPayl
   if (!editing && check.ok) {
     return (
       <div className="link-block">
+        {/* Initial of the site, no network request for a favicon (privacy, CSP). */}
+        <span className="link-favicon" aria-hidden="true">
+          {(check.host.replace(/^www\./, '')[0] ?? '·').toLocaleUpperCase()}
+        </span>
         <div className="link-main">
           <a
             className="link-title"
@@ -46,11 +50,11 @@ export function LinkBlock({ block, payload, autoFocus }: BlockViewProps<LinkPayl
             aria-label={`${title} — ${t('link.open', { host: check.host })}`}
           >
             <span>{title}</span>
-            <ExternalLink size={14} aria-hidden="true" />
+            <ExternalLink size={14} aria-hidden="true" className="link-out" />
           </a>
           <div className="link-meta">
-            <span className="link-host">{check.host}</span>
-            {value.category && <span>· {value.category}</span>}
+            <span className="link-host">{check.host.replace(/^www\./, '')}</span>
+            {value.category && <span className="link-category">{value.category}</span>}
             {value.tags.map((tag) => (
               <span key={tag} className="tag">
                 {tag}

@@ -2,11 +2,21 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  AtSign,
+  CalendarDays,
+  CircleDot,
+  Coins,
   FileDown,
-  MoreHorizontal,
+  Hash,
+  Link2,
   Plus,
+  SlidersHorizontal,
+  SquareCheck,
   TableProperties,
+  Tag,
+  Type,
   X,
+  type LucideIcon,
 } from 'lucide-react';
 import { useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
 import {
@@ -48,6 +58,20 @@ import {
 
 const PAGE = 200;
 
+/** The column type is shown, not asked: one icon before the header label. */
+const typeIcon: Record<DatasetColumn['type'], LucideIcon> = {
+  text: Type,
+  number: Hash,
+  decimal: Hash,
+  money: Coins,
+  boolean: SquareCheck,
+  date: CalendarDays,
+  category: Tag,
+  select: CircleDot,
+  email: AtSign,
+  url: Link2,
+};
+
 /** Header text with unit/currency (written once, not in every cell — datawiz T12). */
 function headerLabel(column: DatasetColumn): string {
   const unit = column.type === 'money' ? column.currency : column.unit;
@@ -84,6 +108,8 @@ export function TableBlock({ block, payload }: BlockViewProps<TablePayload>) {
   const [columnDialog, setColumnDialog] = useState<ColumnDialogState | null>(null);
   const gridRef = useRef<HTMLTableElement>(null);
   const wasFocused = useRef(false);
+  /** Bumped by every programmatic move and every pointer press; a stale move is dropped. */
+  const focusTurn = useRef(0);
 
   const sort: SortSpec = payload.view.sort;
   const filter: FilterSpec = payload.view.filter ?? null;
@@ -133,9 +159,12 @@ export function TableBlock({ block, payload }: BlockViewProps<TablePayload>) {
     const rr = Math.max(0, Math.min(r, visible.length - 1));
     const cc = Math.max(0, Math.min(c, columns.length - 1));
     setFocus({ r: rr, c: cc });
-    requestAnimationFrame(() =>
-      gridRef.current?.querySelector<HTMLElement>(`[data-cell="${rr}:${cc}"]`)?.focus(),
-    );
+    const turn = ++focusTurn.current;
+    // Focus moves one frame later; if the user pressed on a cell in between, theirs wins.
+    requestAnimationFrame(() => {
+      if (turn !== focusTurn.current) return;
+      gridRef.current?.querySelector<HTMLElement>(`[data-cell="${rr}:${cc}"]`)?.focus();
+    });
   };
 
   const commitCell = async (
@@ -153,6 +182,11 @@ export function TableBlock({ block, payload }: BlockViewProps<TablePayload>) {
         datasetId,
         edits: [{ rowId: row.id, columnId: column.id, value }],
       });
+      // The editor is gone, so focus sits on <body> unless the user clicked or tabbed somewhere
+      // while the write was running. Then that choice wins: pulling focus back would make the
+      // next Enter edit the wrong cell.
+      const active = document.activeElement;
+      if (active && active !== document.body) return;
     }
     const r = visible.indexOf(row);
     const c = columns.indexOf(column);
@@ -328,7 +362,7 @@ export function TableBlock({ block, payload }: BlockViewProps<TablePayload>) {
               },
             ]}
           >
-            <MoreHorizontal size={18} aria-hidden="true" />
+            <SlidersHorizontal size={17} aria-hidden="true" />
           </MenuButton>
         </div>
       </div>
@@ -379,134 +413,142 @@ export function TableBlock({ block, payload }: BlockViewProps<TablePayload>) {
         </p>
       )}
 
-      <div
-        className="table-scroll"
-        role="region"
-        aria-label={dataset.title || t('blockType.table')}
-        tabIndex={-1}
-      >
-        <table
-          ref={gridRef}
-          className="grid"
-          onKeyDown={onGridKeyDown}
-          onPaste={(e) => void onPaste(e)}
-          aria-rowcount={rows.length + 1}
+      <div className="table-frame">
+        <div
+          className="table-scroll"
+          role="region"
+          aria-label={dataset.title || t('blockType.table')}
+          tabIndex={-1}
         >
-          <thead>
-            <tr>
-              <th scope="col" className="row-head">
-                <span className="sr-only">{t('table.rowNumber')}</span>
-              </th>
-              {columns.map((column) => {
-                const sorted = sort?.columnId === column.id ? sort.direction : null;
-                return (
-                  <th
-                    key={column.id}
-                    scope="col"
-                    className={isNumericColumn(column) ? 'num' : undefined}
-                    aria-sort={
-                      sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : 'none'
-                    }
-                  >
-                    <span className="th-inner">
-                      <button
-                        type="button"
-                        className="th-label"
-                        title={t(columnTypeKey[column.type])}
-                        onClick={() => setColumnDialog({ mode: 'edit', columnId: column.id })}
-                      >
-                        {headerLabel(column)}
-                      </button>
-                      <button
-                        type="button"
-                        className="th-sort"
-                        aria-label={t('table.sortBy', { column: column.label })}
-                        onClick={() => toggleSort(column.id)}
-                      >
-                        {sorted === 'asc' ? (
-                          <ArrowUp size={14} />
-                        ) : sorted === 'desc' ? (
-                          <ArrowDown size={14} />
-                        ) : (
-                          <ArrowUpDown size={14} />
-                        )}
-                      </button>
-                    </span>
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {visible.map((row, r) => (
-              <tr key={row.id}>
-                <th scope="row" className="row-head">
-                  <button
-                    type="button"
-                    className="row-num"
-                    aria-label={t('table.editRow', { n: r + 1 })}
-                    onClick={() => setRowDialog(row.id)}
-                  >
-                    {r + 1}
-                  </button>
+          <table
+            ref={gridRef}
+            className="grid"
+            onKeyDown={onGridKeyDown}
+            onPaste={(e) => void onPaste(e)}
+            aria-rowcount={rows.length + 1}
+          >
+            <thead>
+              <tr>
+                <th scope="col" className="row-head">
+                  <span className="sr-only">{t('table.rowNumber')}</span>
                 </th>
-                {columns.map((column, c) => {
-                  const cell = row.cells[column.id];
-                  const isEditing = editing?.rowId === row.id && editing.columnId === column.id;
-                  const focused = focus.r === r && focus.c === c;
+                {columns.map((column) => {
+                  const sorted = sort?.columnId === column.id ? sort.direction : null;
+                  const TypeIcon = typeIcon[column.type];
                   return (
-                    <td
+                    <th
                       key={column.id}
-                      data-cell={`${r}:${c}`}
-                      tabIndex={focused && !isEditing ? 0 : -1}
-                      className={`${isNumericColumn(column) ? 'num' : ''}${isEditing ? ' is-editing' : ''}`}
-                      onFocus={() => setFocus({ r, c })}
-                      onMouseDown={() => {
-                        // First click selects; a click on the already selected cell edits.
-                        wasFocused.current = focused;
-                      }}
-                      onDoubleClick={() => setEditing({ rowId: row.id, columnId: column.id })}
-                      onClick={() => {
-                        if (wasFocused.current && !isEditing)
-                          setEditing({ rowId: row.id, columnId: column.id });
-                      }}
+                      scope="col"
+                      className={isNumericColumn(column) ? 'num' : undefined}
+                      aria-sort={
+                        sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : 'none'
+                      }
                     >
-                      {isEditing ? (
-                        <CellEditor
-                          column={column}
-                          cell={cell}
-                          locale={dataLocale}
-                          {...(editing.initialText !== undefined
-                            ? { initialText: editing.initialText }
-                            : {})}
-                          onCommit={(value, move) => void commitCell(row, column, value, move)}
-                          onCancel={(reason) => {
-                            setEditing(null);
-                            if (reason === 'invalid')
-                              toast.show({ message: t('table.notSavedInvalid'), tone: 'error' });
-                            focusCell(r, c);
-                          }}
-                        />
-                      ) : (
-                        renderCell(cell, column)
-                      )}
-                    </td>
+                      <span className="th-inner">
+                        <button
+                          type="button"
+                          className="th-label"
+                          title={`${t(columnTypeKey[column.type])} · ${t('table.editColumn')}`}
+                          onClick={() => setColumnDialog({ mode: 'edit', columnId: column.id })}
+                        >
+                          <TypeIcon size={14} aria-hidden="true" className="th-type" />
+                          <span>{headerLabel(column)}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`th-sort${sorted ? ' is-sorted' : ''}`}
+                          aria-label={t('table.sortBy', { column: column.label })}
+                          onClick={() => toggleSort(column.id)}
+                        >
+                          {sorted === 'asc' ? (
+                            <ArrowUp size={14} />
+                          ) : sorted === 'desc' ? (
+                            <ArrowDown size={14} />
+                          ) : (
+                            <ArrowUpDown size={14} />
+                          )}
+                        </button>
+                      </span>
+                    </th>
                   );
                 })}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {visible.map((row, r) => (
+                <tr key={row.id}>
+                  <th scope="row" className="row-head">
+                    <button
+                      type="button"
+                      className="row-num"
+                      aria-label={t('table.editRow', { n: r + 1 })}
+                      onClick={() => setRowDialog(row.id)}
+                    >
+                      {r + 1}
+                    </button>
+                  </th>
+                  {columns.map((column, c) => {
+                    const cell = row.cells[column.id];
+                    const isEditing = editing?.rowId === row.id && editing.columnId === column.id;
+                    const focused = focus.r === r && focus.c === c;
+                    return (
+                      <td
+                        key={column.id}
+                        data-cell={`${r}:${c}`}
+                        tabIndex={focused && !isEditing ? 0 : -1}
+                        className={`${isNumericColumn(column) ? 'num' : ''}${isEditing ? ' is-editing' : ''}`}
+                        onFocus={() => setFocus({ r, c })}
+                        onMouseDown={() => {
+                          // First click selects; a click on the already selected cell edits.
+                          wasFocused.current = focused;
+                          focusTurn.current++;
+                        }}
+                        onDoubleClick={() => setEditing({ rowId: row.id, columnId: column.id })}
+                        onClick={() => {
+                          if (wasFocused.current && !isEditing)
+                            setEditing({ rowId: row.id, columnId: column.id });
+                        }}
+                      >
+                        {isEditing ? (
+                          <CellEditor
+                            column={column}
+                            cell={cell}
+                            locale={dataLocale}
+                            {...(editing.initialText !== undefined
+                              ? { initialText: editing.initialText }
+                              : {})}
+                            onCommit={(value, move) => void commitCell(row, column, value, move)}
+                            onCancel={(reason) => {
+                              setEditing(null);
+                              if (reason === 'invalid')
+                                toast.show({ message: t('table.notSavedInvalid'), tone: 'error' });
+                              focusCell(r, c);
+                            }}
+                          />
+                        ) : (
+                          renderCell(cell, column)
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
-      <div className="table-foot">
-        {/* Ghost: the page's "Blok ekle" is the view's single filled primary (Von Restorff). */}
-        <button type="button" className="btn btn-ghost btn-small" onClick={() => void addRow()}>
+        {/* Ghost row: the page's "Blok ekle" stays the view's single filled primary. */}
+        <button type="button" className="table-add-row" onClick={() => void addRow()}>
           <Plus size={16} aria-hidden="true" />
           <span>{t('table.addRow')}</span>
         </button>
+      </div>
+
+      <div className="table-foot">
         <span className="muted small">
-          {t('table.summary', { rows: rows.length, missing: missingCount })}
+          {missingCount > 0
+            ? t('table.summary', { rows: rows.length, missing: missingCount })
+            : t('table.rows', { count: rows.length })}
           {sort ? ` · ${t('table.sortedView')}` : ''}
         </span>
         {rows.length > limit && (

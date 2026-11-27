@@ -1,8 +1,9 @@
 /*
- * Panoya design tokens — own identity: warm paper canvas, white page sheet, one deep sea-green
- * accent. Budget (ux-yasalari): 5 font sizes · 2 button styles · 1 accent · 2 shadows · 4 radii.
+ * Panoya design tokens, v2. Warm paper canvas, white page sheet, one pine-green accent; the
+ * amber of the logo's folded corner is a brand colour and never appears in the interface.
+ * Budget (ux-yasalari): 5 font sizes · 2 button styles · 1 accent · 2 shadows · 4 radii.
  * Contrast is measured by `corepack pnpm contrast` (text ≥ 4.5:1, borders/focus ≥ 3:1).
- * Spacing scale is 4-based; group-internal gaps --s2/--s3, between groups --s5/--s6.
+ * Spacing is 4-based: inside a group --s1…--s3, between groups --s5…--s7.
  */
 :root {
   color-scheme: light dark;
@@ -14,12 +15,13 @@
     sans-serif;
   --font-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace;
 
-  --fs-xs: 12px;
-  --fs-sm: 14px;
-  --fs-md: 16px;
-  --fs-lg: 20px;
-  --fs-xl: 28px;
+  --fs-xs: 12px; /* labels, meta, badges */
+  --fs-sm: 14px; /* interface text */
+  --fs-md: 16px; /* reading text, inputs (≥ 16px avoids iOS zoom) */
+  --fs-lg: 20px; /* dialog and section titles */
+  --fs-xl: 30px; /* page title */
   --lh: 1.55;
+  --lh-tight: 1.25;
 
   --s1: 4px;
   --s2: 8px;
@@ -27,37 +29,44 @@
   --s4: 16px;
   --s5: 24px;
   --s6: 32px;
+  --s7: 48px;
 
-  --r-sm: 8px; /* inputs, badges, small controls */
-  --r-btn: 10px; /* buttons */
-  --r-md: 14px; /* sheet, cards, menus, dialogs */
+  --r-sm: 6px; /* badges, keys, chips inside controls */
+  --r-ctl: 8px; /* buttons, inputs, menu and nav items */
+  --r-md: 12px; /* sheet, cards, menus, dialogs, table frame */
   --r-pill: 999px;
 
+  --h-ctl: 40px; /* control height with a mouse; 44px on touch (below) */
+  --h-row: 36px; /* dense rows: tree, menu items, table header */
   --target: 44px;
-  --sidebar-w: 268px;
-  --reading-w: 820px;
+  --sidebar-w: 272px;
+  --reading-w: 860px;
   --bottom-nav-h: 64px;
 
   /* light */
-  --bg: #f4f1ea; /* canvas: warm paper */
+  --bg: #f4f2ed; /* canvas: warm paper */
   --surface: #ffffff; /* the page sheet, cards, dialogs */
-  --surface-2: #ece8df; /* hover, sidebar active, quiet fills */
-  --text: #1b2420;
-  --text-2: #56605b;
-  --border: #e2ddd2; /* rules and card edges (decorative) */
-  --field: #7a827d; /* form control borders (≥ 3:1) */
-  --accent: #0e6b62;
+  --surface-2: #eeebe4; /* hover and quiet fills */
+  --surface-sunken: #f8f6f2; /* table header, code, read-only areas */
+  --text: #171d1a;
+  --text-2: #59615c;
+  --border: #e5e1d9; /* rules and card edges (decorative) */
+  --border-strong: #d4cfc5; /* frames that must stay visible: table, ghost buttons */
+  --field: #7b837e; /* form control borders (≥ 3:1) */
+  --accent: #0b6a5a;
+  --accent-hover: #08594b;
   --accent-text: #ffffff;
-  --accent-soft: #dcefeb;
-  --accent-ink: #0b5750;
+  --accent-soft: #e1f0eb;
+  --accent-ink: #075446;
   --danger: #b3261e;
+  --danger-soft: #fbe9e7;
   --warn-bg: #fbf0d0;
   --warn-text: #5f4700;
-  --focus: #0e6b62;
+  --focus: #0b6a5a;
 
   /* Shadows are tinted with the ink colour, never neutral grey (reads as dirt on paper). */
-  --shadow-1: 0 1px 2px rgb(27 36 32 / 0.06), 0 4px 14px rgb(27 36 32 / 0.06);
-  --shadow-2: 0 18px 48px rgb(27 36 32 / 0.18);
+  --shadow-1: 0 1px 2px rgb(23 29 26 / 0.05), 0 2px 8px rgb(23 29 26 / 0.04);
+  --shadow-2: 0 2px 6px rgb(23 29 26 / 0.06), 0 16px 40px rgb(23 29 26 / 0.16);
 
   /* option badges (measured: text ≥ 5.8:1 on its background) */
   --opt-gray-bg: #ebebe8;
@@ -80,28 +89,32 @@
   --opt-red-fg: #9e2a22;
 
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --dur: 160ms;
+  --dur: 140ms;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #141917;
-    --surface: #1c2320;
-    --surface-2: #26302c;
-    --text: #e9efe9;
-    --text-2: #a3ada8;
-    --border: #2f3a35;
-    --field: #6f7a75;
-    --accent: #5fd0bf;
-    --accent-text: #082320;
-    --accent-soft: #1f3b36;
-    --accent-ink: #8fe3d6;
+    --bg: #111513;
+    --surface: #191e1c;
+    --surface-2: #242b28;
+    --surface-sunken: #151a18;
+    --text: #e7ede9;
+    --text-2: #a0aaa5;
+    --border: #2a322f;
+    --border-strong: #3a4440;
+    --field: #75807b;
+    --accent: #5ccfb7;
+    --accent-hover: #80dcc9;
+    --accent-text: #052019;
+    --accent-soft: #163a32;
+    --accent-ink: #92e6d4;
     --danger: #ff8a80;
+    --danger-soft: #3a1f1d;
     --warn-bg: #3b3220;
     --warn-text: #f3d48a;
-    --focus: #5fd0bf;
-    --shadow-1: 0 1px 2px rgb(0 0 0 / 0.35), 0 4px 14px rgb(0 0 0 / 0.25);
-    --shadow-2: 0 18px 48px rgb(0 0 0 / 0.55);
+    --focus: #5ccfb7;
+    --shadow-1: 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 8px rgb(0 0 0 / 0.2);
+    --shadow-2: 0 2px 6px rgb(0 0 0 / 0.3), 0 16px 40px rgb(0 0 0 / 0.5);
 
     --opt-gray-bg: #3a3b40;
     --opt-gray-fg: #dadbdf;
@@ -121,6 +134,14 @@
     --opt-pink-fg: #f8c8df;
     --opt-red-bg: #562422;
     --opt-red-fg: #ffc7c2;
+  }
+}
+
+/* Touch: every control grows to the 44 px target. */
+@media (pointer: coarse) {
+  :root {
+    --h-ctl: 44px;
+    --h-row: 44px;
   }
 }
 

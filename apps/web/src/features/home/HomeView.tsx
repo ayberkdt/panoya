@@ -30,6 +30,18 @@ export function HomeView({ onCapture, onSearch, onLoadDemo }: Props) {
   }).format(new Date());
   // Captured once per visit: "5 minutes ago" does not need to tick.
   const [now] = useState(() => Date.now());
+  const hour = new Date(now).getHours();
+  const greeting =
+    hour >= 5 && hour < 12
+      ? t('home.greeting.morning')
+      : hour < 18 && hour >= 12
+        ? t('home.greeting.day')
+        : hour >= 18 && hour < 23
+          ? t('home.greeting.evening')
+          : t('home.greeting.night');
+  const live = <T extends { trashed: 0 | 1 }>(m: Map<string, T>) =>
+    [...m.values()].filter((x) => x.trashed === 0).length;
+  const pageCount = live(index.pages);
   const relative = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
   const ago = (iso: string) => {
     const minutes = Math.round((Date.parse(iso) - now) / 60_000);
@@ -43,9 +55,17 @@ export function HomeView({ onCapture, onSearch, onLoadDemo }: Props) {
     <main className="page home" id="main" aria-labelledby="home-title">
       <p className="eyebrow">{today}</p>
       <h1 id="home-title" className="home-title">
-        {t('home.title')}
+        {greeting}
       </h1>
-      <p className="muted home-sub">{t('home.subtitle')}</p>
+      <p className="muted home-sub">
+        {pageCount === 0
+          ? t('home.subtitleEmpty')
+          : t('home.stats', {
+              pages: pageCount,
+              notebooks: live(index.notebooks),
+              folders: live(index.folders),
+            })}
+      </p>
 
       <div className="home-actions">
         <button type="button" className="btn btn-primary" onClick={onCapture}>
@@ -88,11 +108,14 @@ export function HomeView({ onCapture, onSearch, onLoadDemo }: Props) {
                       navigate({ name: 'page', workspaceId: workspace.id, pageId: page.id })
                     }
                   >
-                    <FileText size={18} aria-hidden="true" className="recent-icon" />
+                    <span className="recent-icon" aria-hidden="true">
+                      <FileText size={18} />
+                    </span>
                     <span className="recent-text">
                       <span className="recent-title">{page.title || t('tree.untitled')}</span>
                       <span className="recent-meta">
-                        {path} · {ago(page.updatedAt)}
+                        <span className="recent-path">{path}</span>
+                        <span className="recent-time">{ago(page.updatedAt)}</span>
                       </span>
                     </span>
                     <ArrowRight size={16} aria-hidden="true" className="recent-go" />

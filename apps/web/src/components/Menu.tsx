@@ -1,5 +1,6 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useScrollLock } from '../app/scrollLock';
+import { DEFAULT_PLACEMENT, menuHeight, placeMenu, type Placement } from './menuPlacement';
 
 export interface MenuItem {
   id: string;
@@ -32,7 +33,12 @@ export function MenuButton({
   align = 'end',
 }: MenuButtonProps) {
   const [open, setOpen] = useState(false);
+  const [placement, setPlacement] = useState<Placement>(DEFAULT_PLACEMENT);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const openMenu = () => {
+    setPlacement(placeMenu(buttonRef.current, menuHeight(items.length)));
+    setOpen(true);
+  };
   const menuRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
   useScrollLock(open);
@@ -82,11 +88,11 @@ export function MenuButton({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => (open ? setOpen(false) : openMenu())}
         onKeyDown={(e) => {
           if (e.key === 'ArrowDown') {
             e.preventDefault();
-            setOpen(true);
+            openMenu();
           }
         }}
       >
@@ -100,7 +106,8 @@ export function MenuButton({
             id={menuId}
             role="menu"
             aria-label={label}
-            className={`menu menu-${align}`}
+            className={`menu menu-${align}${placement.side === 'up' ? ' menu-up' : ''}`}
+            style={{ '--menu-max': `${placement.maxHeight}px` } as CSSProperties}
             onKeyDown={onKeyDown}
           >
             {items.map((item) => (

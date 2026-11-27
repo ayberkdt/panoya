@@ -2,9 +2,9 @@ import {
   BookOpen,
   Check,
   ChevronDown,
-  ClipboardList,
   Download,
   FolderPlus,
+  Home,
   Inbox,
   Plus,
   Search,
@@ -19,6 +19,7 @@ import { useRunCommand, useServices, useStoreQuery } from '../../app/services';
 import { switchWorkspace } from '../../app/workspaceSelection';
 import { ExportBackupDialog, RestoreBackupDialog } from '../backup/BackupDialogs';
 import { useWorkspaceIndex } from '../../app/workspaceData';
+import { LogoMark } from '../../components/Logo';
 import { MenuButton } from '../../components/Menu';
 import { useI18n } from '../../i18n';
 import { MoveDialog, type MoveRequest } from './MoveDialog';
@@ -27,6 +28,7 @@ import { Tree } from './Tree';
 interface Props {
   activePageId: string | null;
   trashActive: boolean;
+  homeActive: boolean;
   onSearch: () => void;
   onCapture: () => void;
   onOpenInbox: () => void;
@@ -39,6 +41,7 @@ interface Props {
 export function Sidebar({
   activePageId,
   trashActive,
+  homeActive,
   onSearch,
   onCapture,
   onOpenInbox,
@@ -120,33 +123,12 @@ export function Sidebar({
             },
           ]}
         >
-          <span className="brand-mark" aria-hidden="true">
-            <ClipboardList size={16} />
-          </span>
+          <LogoMark size={30} />
           <span className="brand-text">
             <span className="brand">{t('app.name')}</span>
             <span className="brand-ws">{workspace.name}</span>
           </span>
-          <ChevronDown size={14} aria-hidden="true" />
-        </MenuButton>
-        <MenuButton
-          label={t('nav.new')}
-          items={[
-            {
-              id: 'folder',
-              label: t('nav.newFolder'),
-              icon: <FolderPlus size={16} />,
-              onSelect: () => void createRoot('folder'),
-            },
-            {
-              id: 'notebook',
-              label: t('nav.newNotebook'),
-              icon: <BookOpen size={16} />,
-              onSelect: () => void createRoot('notebook'),
-            },
-          ]}
-        >
-          <Plus size={18} aria-hidden="true" />
+          <ChevronDown size={14} aria-hidden="true" className="brand-caret" />
         </MenuButton>
         <button
           type="button"
@@ -164,6 +146,20 @@ export function Sidebar({
       </button>
 
       <ul className="nav-list">
+        <li>
+          <button
+            type="button"
+            className={`nav-item${homeActive ? ' is-active' : ''}`}
+            aria-current={homeActive ? 'page' : undefined}
+            onClick={() => {
+              navigate({ name: 'home' });
+              onNavigate();
+            }}
+          >
+            <Home size={16} aria-hidden="true" />
+            <span>{t('nav.home')}</span>
+          </button>
+        </li>
         <li>
           <button type="button" className="nav-item" onClick={onSearch}>
             <Search size={16} aria-hidden="true" />
@@ -194,6 +190,28 @@ export function Sidebar({
       </ul>
 
       <div className="sidebar-tree">
+        <div className="sidebar-section-head">
+          <h2 className="sidebar-section-title">{t('nav.pages')}</h2>
+          <MenuButton
+            label={t('nav.new')}
+            items={[
+              {
+                id: 'folder',
+                label: t('nav.newFolder'),
+                icon: <FolderPlus size={16} />,
+                onSelect: () => void createRoot('folder'),
+              },
+              {
+                id: 'notebook',
+                label: t('nav.newNotebook'),
+                icon: <BookOpen size={16} />,
+                onSelect: () => void createRoot('notebook'),
+              },
+            ]}
+          >
+            <Plus size={18} aria-hidden="true" />
+          </MenuButton>
+        </div>
         {!index.loading && index.tree.length === 0 ? (
           <div className="empty-tree">
             <p className="muted">{t('nav.emptyTree')}</p>

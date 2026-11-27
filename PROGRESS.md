@@ -65,3 +65,47 @@ acceptance evidenced, listed items open), NOT STARTED.
 - **Commands:** `corepack pnpm check` → 0 (contrast 50/50, eslint, tsc ×6, vitest 162/162, build) · `corepack pnpm e2e:prod` → 19 passed (twice) · `corepack pnpm e2e` (dev) → 18 passed, 1 skipped (CSP test needs the production build).
 - **Flaky:** `status.spec.ts` "tracker template…" timed out waiting for the status select in 2 of 5 full `e2e:prod` runs (runs 2–3, built while Zod was configured too late; runs 1, 4, 5 passed; 3/3 alone). Link to the Zod change not shown; cause not found yet.
 - **Unverified:** an actual Vercel build and the response headers on a deployed URL (the per-path `Cache-Control` rule is not exercised by `vite preview`).
+
+## Session log — 2026-11-27 (visual identity v2)
+
+- **Changes:** logo and app icons (favicon, apple-touch, 192/512, maskable) + web manifest; v2 tokens and a rewritten `app.css`; block picker with descriptions; link cards; framed data table with type icons and an inline "Yeni satır" row; grouped column types; home greeting with counts; "Ana sayfa" navigation; Turkish and English copy pass (see ADR-008 v2).
+- **Bugs fixed:** block menu cut off at the bottom of the screen (now opens upwards when it fits); tree menu clipped by the sidebar scroll box; home screen unreachable after opening a page; table focus race — a cell committed with Enter pulled focus back one frame later over the cell the user had just pressed (cause of the flaky `status.spec.ts`; 10/10 passes in `--repeat-each=5` on the production build after the fix).
+- **Commands:** `corepack pnpm check` → 0 (contrast 62/62, eslint, tsc ×6, vitest 162/162, build) · `corepack pnpm e2e` → 18 passed, 1 skipped · `corepack pnpm e2e:prod` → 19 passed · UX auditor on 12 live-DOM snapshots (desktop light/dark, phone, block picker, table, column dialog, home, drawer) → 0 HATA; remaining UYARI: sidebar tree rows (navigation list), grid header buttons (data-grid pattern), six recent-page cards on home (navigation).
+- **Flaky tests, causes found in the code:** `g3.spec.ts` "CSV export" asserted the warning toast only after awaiting the download file; info toasts closed after a fixed 3 s (`Toasts.tsx`), so a slow run missed it. Toasts now stay for their reading time (`components/readingTime.ts`: 1.5 s + 0.3 s per word, 3–10 s, unit-tested) and the test checks the toast first (5/5 repeated). `notebook.spec.ts` T02 read the clipboard right after clicking "Konuyu kopyala" without waiting for the asynchronous write; it now polls. Neither failure's output was kept, so both causes are read from the code, not from a captured trace.
+- **Copy check:** metinoskop `style-lint.py --teslim --son-okur` on all 392 Turkish strings → TESLİM (0 label, 0 announcement, 0 hard-suppression pattern); against the previous copy: no new pattern, hedges 6 → 5, "bir" per 100 words 2.1 → 1.6. Remaining review flags are the same sentence reused on separate screens ("Ctrl+Z ile geri alabilirsin."), kept on purpose.
+- **datawiz:** `tablo.denetle` on the values exactly as the grid renders them → 0 findings.
+- **datawiz report:** `dw.Tablo(...).kaydet(kati=True)` on the grid values → LaTeX audit 0 HATA · 0 UYARI · TESLİM EDİLEBİLİR, width 23 mm of 169 mm; PNG checked. (datawiz rounds 8,5 to 8 for a publication table; the Panoya grid keeps the value as entered, which is right for data entry.)
+- **Installability and phone sizes (production build, `vite preview` with the Vercel headers):** Chrome's own audit (CDP `Page.getInstallabilityErrors`) in a normal profile → no errors, app installable; manifest parse errors 0; every icon 200 and its declared size (192, 512, maskable 512, apple-touch 180). Pixel 7 and iPhone 13 emulation: horizontal overflow 0 px, CSP violations 0, console errors 0. Fixed from the screenshots: duplicate "Hızlı not"/"Ara" on the phone home screen (the bottom bar has them), sticky hover on touch icon buttons.
+- **Unverified:** a physical phone (emulation is Chromium with phone viewport and user agent, not iOS Safari/WebKit); the home-screen icon as rendered by iOS/Android launchers; trademark search for the mark.
+
+### Before / after (same script on both builds: last commit e898f2a in a temporary worktree vs. this tree)
+
+| Measure                                                             | Before       | After       |
+| ------------------------------------------------------------------- | ------------ | ----------- |
+| Block picker visible on a 640 px tall screen                        | 44 %         | 100 %       |
+| Way back to the home screen while a page is open                    | none         | yes         |
+| Block buttons visible at rest (no hover/focus)                      | 4            | 0           |
+| Numeric column label vs. figures (px off the right edge)            | 36           | 0           |
+| Column type list groups                                             | 0            | 3           |
+| Filled primary buttons on the phone home screen                     | 2            | 1           |
+| Brand mark                                                          | generic icon | logo        |
+| Button height with a mouse (px)                                     | 44           | 40          |
+| Distinct shadows on the page (budget ≤ 2)                           | 1            | 2           |
+| Dialog: last field → primary action (px, budget ≤ 24)               | 16           | 16          |
+| Sidebar row menu item receives a click                              | yes          | yes         |
+| Turkish copy: hard-suppression patterns / hedges / "bir" per 100 w. | 0 / 6 / 2.1  | 0 / 5 / 1.6 |
+
+Regression tests added for the fixed behaviour: `tests/e2e/ui.spec.ts` (picker fully visible on a short screen, row menu hittable, home reachable and last page restored at start, a description for every block type) and `components/menuPlacement.test.ts` (down / up / short screen capped / clipped scroll box). The short-screen case was found by the new test (picker 49 % visible) and fixed: when neither side fits, the popup opens towards the larger space with its height capped.
+
+### Copy metrics (old = e898f2a, new = this tree; definitions in the session's `copy_metrics.py`)
+
+| Measure                                                               | Before | After |
+| --------------------------------------------------------------------- | ------ | ----- |
+| Extra wordings for one concept (filter, empty cell, CC/BCC, delete …) | 2      | 0     |
+| Unexplained abbreviations ("Bilgi"/"Gizli" for CC/BCC)                | 2      | 0     |
+| Explanatory parentheses inside strings                                | 40     | 34    |
+| Query syntax shown as running text (search hint)                      | 1      | 0     |
+| Words per message (mean, strings ≥ 4 words)                           | 7.3    | 7.2   |
+| Messages over 20 words                                                | 1      | 1     |
+
+The metric found two inconsistencies introduced during this pass ("Filtreyi kaldır" next to "Süz:"/"süzgeç"; "eksik hücreler" next to "boş hücre"); both fixed before these numbers were taken.

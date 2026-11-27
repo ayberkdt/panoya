@@ -7,15 +7,15 @@ test.describe('G2 notebook flows', () => {
   }) => {
     await openApp(page);
     // Create folder via the empty-state action and rename inline.
-    await page.getByRole('button', { name: 'İlk klasörü oluştur' }).click();
+    await page.getByRole('button', { name: 'Klasör oluştur' }).click();
     const rename = page.locator('.tree-rename');
     await rename.fill('Üniversite');
     await rename.press('Enter');
-    await page.getByRole('button', { name: 'Üniversite için işlemler' }).click();
+    await page.getByRole('button', { name: 'Üniversite işlemleri' }).click();
     await page.getByRole('menuitem', { name: 'Yeni defter' }).click();
     await page.locator('.tree-rename').fill('Linkler');
     await page.locator('.tree-rename').press('Enter');
-    await page.getByRole('button', { name: 'Linkler için işlemler' }).click();
+    await page.getByRole('button', { name: 'Linkler işlemleri' }).click();
     await page.getByRole('menuitem', { name: 'Yeni sayfa' }).click();
     await page.locator('#page-title').fill('Satellite Systems');
     await page.locator('#page-title').press('Enter');
@@ -25,9 +25,9 @@ test.describe('G2 notebook flows', () => {
     await page.getByRole('combobox', { name: 'Blok türü ara' }).fill('link');
     await page.keyboard.press('Enter');
     const url = 'https://example.invalid/attendance?course=demo&t=Ab%2F9#form';
-    await page.getByLabel('Adres (URL)').fill(url);
+    await page.getByLabel('Adres', { exact: true }).fill(url);
     await page.getByLabel('Başlık', { exact: true }).fill('Yoklama');
-    await page.getByRole('button', { name: 'Bitti' }).click();
+    await page.getByRole('button', { name: 'Tamam' }).click();
     await waitSaved(page);
 
     await page.reload();
@@ -44,7 +44,7 @@ test.describe('G2 notebook flows', () => {
     await page.getByRole('button', { name: 'Blok ekle' }).click();
     await page.getByRole('combobox', { name: 'Blok türü ara' }).fill('link');
     await page.keyboard.press('Enter');
-    const field = page.getByLabel('Adres (URL)');
+    const field = page.getByLabel('Adres', { exact: true });
     await field.fill('javascript:alert(document.cookie)');
     await expect(page.getByText('Yalnız http ve https adresleri açılabilir.')).toBeVisible();
     await expect(field).toHaveAttribute('aria-invalid', 'true');
@@ -70,8 +70,11 @@ test.describe('G2 notebook flows', () => {
     expect(body.replace(/\r\n/g, '\n')).toBe(DEMO_MAIL_BODY);
 
     await page.getByRole('button', { name: 'Konuyu kopyala' }).click();
+    // The clipboard write is asynchronous; read until it lands instead of racing it.
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe('Proje desteği hakkında');
     const subject = await page.evaluate(() => navigator.clipboard.readText());
-    expect(subject).toBe('Proje desteği hakkında');
     expect(subject).not.toContain('Hocam');
   });
 
@@ -90,7 +93,7 @@ test.describe('G2 notebook flows', () => {
       });
     });
     await page.getByRole('button', { name: 'Linki kopyala' }).first().click();
-    const dialog = page.getByRole('dialog', { name: 'Otomatik kopyalama yapılamadı' });
+    const dialog = page.getByRole('dialog', { name: 'Kopyalanamadı' });
     await expect(dialog).toBeVisible();
     await expect(dialog.locator('textarea')).toHaveValue(
       'https://example.invalid/attendance?course=demo#form',
@@ -104,8 +107,8 @@ test.describe('G2 notebook flows', () => {
     await openApp(page);
     await loadDemo(page);
     await page.getByRole('button', { name: 'Sayfa işlemleri' }).click();
-    await page.getByRole('menuitem', { name: 'Çöp kutusuna taşı' }).click();
-    await expect(page.getByText('“Satellite Systems” çöp kutusuna taşındı')).toBeVisible();
+    await page.getByRole('menuitem', { name: 'Çöp kutusuna at' }).click();
+    await expect(page.getByText('“Satellite Systems” çöp kutusuna atıldı')).toBeVisible();
     await expect(page.getByRole('treeitem', { name: /Satellite Systems/ })).toHaveCount(0);
     await page.getByRole('button', { name: 'Geri al' }).click();
     await expect(
@@ -113,8 +116,8 @@ test.describe('G2 notebook flows', () => {
     ).toBeVisible();
 
     // Trash the whole Üniversite folder, then restore it from the trash view.
-    await page.getByRole('button', { name: 'Üniversite için işlemler' }).click();
-    await page.getByRole('menuitem', { name: 'Çöp kutusuna taşı' }).click();
+    await page.getByRole('button', { name: 'Üniversite işlemleri' }).click();
+    await page.getByRole('menuitem', { name: 'Çöp kutusuna at' }).click();
     await page.getByRole('button', { name: 'Çöp kutusu' }).click();
     const row = page.locator('.trash-row', { hasText: 'Üniversite' });
     await expect(row).toContainText('öğe');
@@ -148,7 +151,7 @@ test.describe('G2 notebook flows', () => {
     await openApp(page);
     await page.getByRole('button', { name: 'Hızlı not' }).first().click();
     await page
-      .getByRole('textbox', { name: 'Bir şey yaz ya da link yapıştır' })
+      .getByRole('textbox', { name: 'Aklındakini yaz ya da link yapıştır' })
       .fill('https://example.invalid/materials');
     await page.getByRole('button', { name: 'Kaydet' }).click();
     await page.getByRole('button', { name: 'Gelen kutusu' }).first().click();

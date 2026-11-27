@@ -47,6 +47,13 @@ const pairs = [
   ['field', 'bg', 3],
   ['focus', 'bg', 3],
   ['focus', 'surface', 3],
+  // v2 tokens: table header and read-only areas, link host, destructive hover
+  ['text', 'surface-sunken', 4.5],
+  ['text-2', 'surface-sunken', 4.5],
+  ['accent-ink', 'surface', 4.5],
+  ['accent-ink', 'surface-sunken', 4.5],
+  ['danger', 'danger-soft', 4.5],
+  ['accent-text', 'accent-hover', 4.5],
 ];
 for (const c of ['gray', 'brown', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'red']) {
   pairs.push([`opt-${c}-fg`, `opt-${c}-bg`, 4.5]);

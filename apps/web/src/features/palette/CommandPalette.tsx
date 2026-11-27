@@ -249,7 +249,20 @@ export function CommandPalette({ open, onClose, actions }: Props) {
         <BusyNote active label={t('search.building')} />
       ) : (
         <p className="muted small search-hint">
-          {status === 'error' ? t('search.failed') : t('search.hint')}
+          {status === 'error' ? (
+            t('search.failed')
+          ) : (
+            <>
+              <span>{t('search.hint')}</span>
+              {t('search.hintExamples')
+                .split(' ')
+                .map((example) => (
+                  <code key={example} className="hint-chip">
+                    {example}
+                  </code>
+                ))}
+            </>
+          )}
         </p>
       )}
       {errors.length > 0 && (

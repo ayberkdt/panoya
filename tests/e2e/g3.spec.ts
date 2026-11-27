@@ -57,7 +57,7 @@ test.describe('G3 search', () => {
     await page.keyboard.press('Escape');
 
     await page.getByRole('button', { name: 'Sayfa işlemleri' }).click();
-    await page.getByRole('menuitem', { name: 'Çöp kutusuna taşı' }).click();
+    await page.getByRole('menuitem', { name: 'Çöp kutusuna at' }).click();
     const again = await openPalette(page);
     await again.fill('yoklama');
     await expect(page.getByRole('option').filter({ hasText: 'Yoklama' })).toHaveCount(0);
@@ -72,7 +72,7 @@ test.describe('G3 tables', () => {
     await loadDemo(page);
     await createTableFromCsv(page, FIXTURE);
     const table = page.locator('.table-block');
-    await expect(table.getByText('6 satır · 2 eksik hücre')).toBeVisible();
+    await expect(table.getByText('6 satır · 2 boş hücre')).toBeVisible();
     // Row 4 "y" is missing (dash), row 6 "x" is missing; 0 would have been shown as 0.
     await expect(table.locator('[data-cell="3:1"]')).toHaveText('—');
 
@@ -82,7 +82,7 @@ test.describe('G3 tables', () => {
     await page.keyboard.type('8,5');
     await page.keyboard.press('Enter');
     await expect(table.locator('[data-cell="3:1"]')).toHaveText('8,5');
-    await expect(table.getByText('6 satır · 1 eksik hücre')).toBeVisible();
+    await expect(table.getByText('6 satır · 1 boş hücre')).toBeVisible();
 
     await page.keyboard.type('abc'); // focus moved to row 5, column y
     await page.keyboard.press('Enter');
@@ -108,7 +108,7 @@ test.describe('G3 tables', () => {
       await page.keyboard.press('Control+v');
     };
     await paste('5\nbeş');
-    await expect(page.getByText('Yapıştırma yapılmadı: 1 değer')).toBeVisible();
+    await expect(page.getByText('Yapıştırılmadı: 1 değer')).toBeVisible();
     await expect(cell).toHaveText('1');
 
     await paste('5\n6\n7');
@@ -123,10 +123,11 @@ test.describe('G3 tables', () => {
     const download = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Tablo işlemleri' }).click();
     await page.getByRole('menuitem', { name: 'CSV olarak indir', exact: true }).click();
+    // Check the toast while it is up; waiting for the file first raced its lifetime.
+    await expect(page.getByText('Formül gibi başlayan 1 hücrenin')).toBeVisible();
     const file = await (await download).path();
     const text = readFileSync(file, 'utf8');
     expect(text).toContain(`"'=HYPERLINK(""x"")";-5`);
-    await expect(page.getByText('Formüle benzeyen 1 metin hücresinin')).toBeVisible();
   });
 });
 
@@ -170,7 +171,7 @@ test.describe('G3 backup', () => {
       'href',
       'https://example.invalid/attendance?course=demo#form',
     );
-    await expect(page.locator('.table-block').getByText('6 satır · 2 eksik hücre')).toBeVisible();
+    await expect(page.locator('.table-block').getByText('6 satır · 2 boş hücre')).toBeVisible();
   });
 
   test('rejects a file that is not a Panoya backup', async ({ page }) => {
@@ -183,7 +184,7 @@ test.describe('G3 backup', () => {
       mimeType: 'application/zip',
       buffer: Buffer.from('not a zip'),
     });
-    await expect(dialog.getByRole('alert')).toHaveText('Bu bir ZIP dosyası değil ya da bozuk.');
+    await expect(dialog.getByRole('alert')).toHaveText('Dosya ZIP değil ya da bozuk.');
     await expect(
       dialog.getByRole('button', { name: 'Yeni çalışma alanı olarak geri yükle' }),
     ).toBeDisabled();

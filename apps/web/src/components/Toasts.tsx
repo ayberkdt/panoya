@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useI18n } from '../i18n';
+import { readingTime } from './readingTime';
 
 export interface ToastInput {
   message: string;
@@ -47,7 +48,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         const id = nextId.current++;
         setItems((list) => [...list.slice(-2), { ...toast, id }]);
         const duration =
-          toast.duration ?? (toast.tone === 'error' ? 0 : toast.action ? 6000 : 3000);
+          toast.duration ??
+          (toast.tone === 'error' ? 0 : toast.action ? 6000 : readingTime(toast.message));
         if (duration > 0) setTimeout(() => dismiss(id), duration);
       },
       announce(message) {

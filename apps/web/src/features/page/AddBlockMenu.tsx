@@ -1,6 +1,7 @@
 import { Plus } from 'lucide-react';
-import { useId, useMemo, useRef, useState } from 'react';
-import { useI18n } from '../../i18n';
+import { useId, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useI18n, type MessageKey } from '../../i18n';
+import { DEFAULT_PLACEMENT, placeMenu, type Placement } from '../../components/menuPlacement';
 import { blockUis } from '../blocks/catalog';
 import { foldText } from '../../app/text';
 
@@ -12,20 +13,26 @@ interface Props {
   showButton?: boolean;
 }
 
+/** One-line description under each type: "blockType.link" → "blockDesc.link". */
+const descKey = (label: MessageKey) => label.replace('blockType.', 'blockDesc.') as MessageKey;
+
 /**
- * Block-type picker: 8 types grouped into 2 categories with search (Hick/choice-overload budget),
+ * Block-type picker: 9 types grouped into 3 categories with search (Hick/choice-overload budget),
  * default "Metin" first and pre-selected. Keyboard: type to filter, ↑/↓, Enter, Esc.
  */
 export function AddBlockMenu({ open, onOpenChange, onPick, showButton = true }: Props) {
   const { t } = useI18n();
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
+  const [placement, setPlacement] = useState<Placement>(DEFAULT_PLACEMENT);
   const listId = useId();
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   const results = useMemo(() => {
     const q = foldText(query.trim());
-    return blockUis.filter((b) => !q || foldText(`${t(b.label)} ${t(b.synonyms)}`).includes(q));
+    return blockUis.filter(
+      (b) => !q || foldText(`${t(b.label)} ${t(b.synonyms)} ${t(descKey(b.label))}`).includes(q),
+    );
   }, [query, t]);
 
   const close = () => {
@@ -51,7 +58,10 @@ export function AddBlockMenu({ open, onOpenChange, onPick, showButton = true }: 
           className="btn btn-primary"
           aria-haspopup="listbox"
           aria-expanded={open}
-          onClick={() => onOpenChange(!open)}
+          onClick={() => {
+            if (!open) setPlacement(placeMenu(buttonRef.current, 440));
+            onOpenChange(!open);
+          }}
         >
           <Plus size={18} aria-hidden="true" />
           <span>{t('page.addBlock')}</span>
@@ -60,7 +70,10 @@ export function AddBlockMenu({ open, onOpenChange, onPick, showButton = true }: 
       {open && (
         <>
           <div className="menu-scrim" aria-hidden="true" onClick={close} />
-          <div className="menu menu-start block-picker">
+          <div
+            className={`menu menu-start block-picker${placement.side === 'up' ? ' menu-up' : ''}`}
+            style={{ '--menu-max': `${placement.maxHeight}px` } as CSSProperties}
+          >
             <input
               className="input"
               autoFocus
@@ -89,7 +102,7 @@ export function AddBlockMenu({ open, onOpenChange, onPick, showButton = true }: 
                 e.preventDefault();
               }}
             />
-            <div id={listId} role="listbox" aria-label={t('page.addBlock')}>
+            <div id={listId} role="listbox" aria-label={t('page.addBlock')} className="picker-list">
               {groups.length === 0 && <p className="menu-empty">{t('blockMenu.none')}</p>}
               {groups.map((group) => (
                 <div
@@ -109,14 +122,17 @@ export function AddBlockMenu({ open, onOpenChange, onPick, showButton = true }: 
                         id={`${listId}-${item.type}`}
                         role="option"
                         aria-selected={index === active}
-                        className={`menu-item${index === active ? ' is-active' : ''}`}
+                        className={`menu-item picker-item${index === active ? ' is-active' : ''}`}
                         onPointerEnter={() => setActive(index)}
                         onClick={() => pick(item.type)}
                       >
-                        <span className="menu-icon" aria-hidden="true">
+                        <span className="picker-icon" aria-hidden="true">
                           <Icon size={16} />
                         </span>
-                        <span>{t(item.label)}</span>
+                        <span className="picker-text">
+                          <span className="picker-label">{t(item.label)}</span>
+                          <span className="picker-desc">{t(descKey(item.label))}</span>
+                        </span>
                       </div>
                     );
                   })}

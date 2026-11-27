@@ -14,7 +14,7 @@ import { BusyNote } from '../../components/BusyNote';
 import { Dialog } from '../../components/Dialog';
 import { useI18n } from '../../i18n';
 import { presetOptions } from './ColumnDialog';
-import { COLUMN_TYPE_ORDER, columnTypeKey } from './tableUtils';
+import { ColumnTypeOptions } from './ColumnTypeOptions';
 
 const PREVIEW_ROWS = 8;
 
@@ -355,11 +355,7 @@ export function ImportDialog({ open, pageId, placement, onClose, onCreated }: Pr
                             setTypes((prev) => ({ ...prev, [i]: e.target.value as ColumnType }))
                           }
                         >
-                          {COLUMN_TYPE_ORDER.map((ct) => (
-                            <option key={ct} value={ct}>
-                              {t(columnTypeKey[ct])}
-                            </option>
-                          ))}
+                          <ColumnTypeOptions />
                         </select>
                       </span>
                     </th>

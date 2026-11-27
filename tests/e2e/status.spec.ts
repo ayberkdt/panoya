@@ -37,10 +37,10 @@ test.describe('status tracking table', () => {
     await expect(status.locator('.opt-badge')).toHaveText('Yapıldı');
 
     // Counts per status; clicking filters the view (data unchanged).
-    const bar = table.getByRole('group', { name: /Durum durumları/ });
+    const bar = table.getByRole('group', { name: /Durum sayaçları/ });
     await expect(bar.getByRole('button', { name: /Yapıldı\s*1/ })).toBeVisible();
     await bar.getByRole('button', { name: /Yapıldı\s*1/ }).click();
-    await expect(table.getByText('3 satırdan 1 tanesi gösteriliyor')).toBeVisible();
+    await expect(table.getByText('3 satırın 1 tanesi gösteriliyor')).toBeVisible();
     await table.getByRole('button', { name: 'Filtreyi kaldır' }).click();
     await expect(table.getByText('3 satır · ', { exact: false })).toBeVisible();
 
@@ -75,7 +75,7 @@ test.describe('status tracking table', () => {
       'select',
     );
     await dialog.getByRole('button', { name: /Tabloyu oluştur/ }).click();
-    const bar = page.locator('.table-block').getByRole('group', { name: /Mail Durumu durumları/ });
+    const bar = page.locator('.table-block').getByRole('group', { name: /Mail Durumu sayaçları/ });
     await expect(bar.getByRole('button', { name: /Atılmadı\s*2/ })).toBeVisible();
     await expect(bar.getByRole('button', { name: /Olumsuz\s*1/ })).toBeVisible();
   });

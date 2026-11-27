@@ -1,6 +1,7 @@
 import { BookOpen, Inbox, Plus, Search } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ConfirmDialog } from '../components/Dialog';
+import { LogoMark } from '../components/Logo';
 import { useToast } from '../components/Toasts';
 import { QuickCapture } from '../features/capture/QuickCapture';
 import { ensureInboxPage } from '../features/capture/inbox';
@@ -51,9 +52,13 @@ export function App({ onLocaleChange }: { onLocaleChange: (locale: UiLocale) => 
       navigate({ name: 'home' }, { replace: true });
   }, [route, workspace.id]);
 
-  // Home: reopen the last page on this device when it still exists.
+  // App start: reopen the last page on this device when it still exists. Only once, so the
+  // home screen stays reachable afterwards (logo, "Ana sayfa").
+  const restored = useRef(false);
   useEffect(() => {
-    if (route.name !== 'home' || index.loading) return;
+    if (restored.current || index.loading) return;
+    restored.current = true;
+    if (route.name !== 'home') return;
     const last = lastPage.get(workspace.id);
     if (last && index.pages.get(last)?.trashed === 0 && index.pathTo(last).length > 0) {
       navigate({ name: 'page', workspaceId: workspace.id, pageId: last }, { replace: true });
@@ -139,7 +144,16 @@ export function App({ onLocaleChange }: { onLocaleChange: (locale: UiLocale) => 
         {t('nav.skipToContent')}
       </a>
       <header className="mobile-bar">
+        <button
+          type="button"
+          className="icon-btn mobile-home"
+          aria-label={t('nav.home')}
+          onClick={() => navigate({ name: 'home' })}
+        >
+          <LogoMark size={28} />
+        </button>
         <span className="mobile-title">{pageTitle}</span>
+        <span className="mobile-bar-spacer" aria-hidden="true" />
       </header>
 
       <div className="drawer-scrim" aria-hidden="true" onClick={() => setDrawerOpen(false)} />
@@ -147,6 +161,7 @@ export function App({ onLocaleChange }: { onLocaleChange: (locale: UiLocale) => 
         <Sidebar
           activePageId={activePageId}
           trashActive={route.name === 'trash'}
+          homeActive={route.name === 'home'}
           onSearch={() => setPaletteOpen(true)}
           onCapture={() => setCaptureOpen(true)}
           onOpenInbox={() => void openInbox()}

@@ -14,7 +14,8 @@ import { useRunCommand, useServices } from '../../app/services';
 import { ConfirmDialog, Dialog } from '../../components/Dialog';
 import { useI18n, type MessageKey } from '../../i18n';
 import { OptionBadge } from './OptionBadge';
-import { COLUMN_TYPE_ORDER, columnTypeKey, newColumnId, newOptionId } from './tableUtils';
+import { ColumnTypeOptions } from './ColumnTypeOptions';
+import { newColumnId, newOptionId } from './tableUtils';
 
 export type ColumnDialogState = { mode: 'add' } | { mode: 'edit'; columnId: string };
 
@@ -223,11 +224,7 @@ export function ColumnDialog({
             value={type}
             onChange={(e) => setType(e.target.value as ColumnType)}
           >
-            {COLUMN_TYPE_ORDER.map((ct) => (
-              <option key={ct} value={ct}>
-                {t(columnTypeKey[ct])}
-              </option>
-            ))}
+            <ColumnTypeOptions />
           </select>
           {type === 'money' && (
             <>
