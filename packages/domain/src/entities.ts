@@ -1,4 +1,12 @@
 import { z } from 'zod';
+import {
+  cellValueSchema,
+  columnsValid,
+  DATASET_LIMITS,
+  datasetColumnSchema,
+  datasetSourceSchema,
+  rowHistoryEntrySchema,
+} from './dataset';
 import { DomainError } from './errors';
 import { isValidRank } from './rank';
 
@@ -10,14 +18,21 @@ export const LIMITS = {
   /** Serialized JSON size of a single block payload. */
   blockPayloadBytes: 512 * 1024,
   folderDepth: 16,
-  /** Maximum number of entities one command may touch (subtree trash/duplicate). */
-  batchSize: 5000,
+  /** Maximum number of entities one command may touch (subtree trash/duplicate, dataset import). */
+  batchSize: 25_000,
 } as const;
 
 export const idSchema = z.uuid();
 export const isoDateTimeSchema = z.iso.datetime({ offset: false });
 
-export const entityKinds = ['folder', 'notebook', 'page', 'block'] as const;
+export const entityKinds = [
+  'folder',
+  'notebook',
+  'page',
+  'block',
+  'dataset',
+  'datasetRow',
+] as const;
 export type EntityKind = (typeof entityKinds)[number];
 
 export const localeSchema = z.enum(['tr-TR', 'en-US']);
@@ -115,7 +130,35 @@ export const blockSchema = z
   .refine(trashConsistent, trashMessage);
 export type Block = z.infer<typeof blockSchema>;
 
-export type Entity = Folder | Notebook | Page | Block;
+/** Typed table data (spec 10). Lives at workspace level; blocks reference it by id. */
+export const datasetSchema = z
+  .object({
+    ...baseShape,
+    kind: z.literal('dataset'),
+    title: nameSchema,
+    columns: z.array(datasetColumnSchema).refine(columnsValid, 'invalid columns'),
+    source: datasetSourceSchema,
+    /** Increments on every committed data change (rows or schema); keys derived caches. */
+    dataRevision: z.number().int().nonnegative(),
+  })
+  .refine(trashConsistent, trashMessage);
+export type Dataset = z.infer<typeof datasetSchema>;
+
+export const datasetRowSchema = z
+  .object({
+    ...baseShape,
+    kind: z.literal('datasetRow'),
+    datasetId: idSchema,
+    rank: rankSchema,
+    /** Keyed by column id; absent key = missing. */
+    cells: z.record(z.string(), cellValueSchema),
+    /** Change history of tracked columns, oldest first (capped). */
+    history: z.array(rowHistoryEntrySchema).max(DATASET_LIMITS.historyPerRow).optional(),
+  })
+  .refine(trashConsistent, trashMessage);
+export type DatasetRow = z.infer<typeof datasetRowSchema>;
+
+export type Entity = Folder | Notebook | Page | Block | Dataset | DatasetRow;
 export type EntityOf<K extends EntityKind> = Extract<Entity, { kind: K }>;
 
 export const entitySchemas = {
@@ -123,6 +166,8 @@ export const entitySchemas = {
   notebook: notebookSchema,
   page: pageSchema,
   block: blockSchema,
+  dataset: datasetSchema,
+  datasetRow: datasetRowSchema,
 } as const satisfies Record<EntityKind, z.ZodType>;
 
 /** Name of the field that points at the parent record, per kind. */
@@ -131,7 +176,9 @@ export const parentField = {
   notebook: 'folderId',
   page: 'notebookId',
   block: 'pageId',
-} as const satisfies Record<EntityKind, string>;
+  dataset: null,
+  datasetRow: 'datasetId',
+} as const satisfies Record<EntityKind, string | null>;
 
 export function parentIdOf(entity: Entity): string | null {
   switch (entity.kind) {
@@ -143,6 +190,10 @@ export function parentIdOf(entity: Entity): string | null {
       return entity.notebookId;
     case 'block':
       return entity.pageId;
+    case 'dataset':
+      return null;
+    case 'datasetRow':
+      return entity.datasetId;
   }
 }
 
@@ -157,8 +208,8 @@ export function isActive(entity: { trashed: 0 | 1 }): boolean {
 /** Validates a record read from storage or an import; throws a VALIDATION DomainError. */
 export function validateEntity(entity: unknown): Entity {
   const kind = (entity as { kind?: unknown } | null)?.kind;
-  if (kind === 'folder' || kind === 'notebook' || kind === 'page' || kind === 'block') {
-    const result = entitySchemas[kind].safeParse(entity);
+  if (typeof kind === 'string' && (entityKinds as readonly string[]).includes(kind)) {
+    const result = entitySchemas[kind as EntityKind].safeParse(entity);
     if (result.success) return result.data;
     throw new DomainError('VALIDATION', 'error.entity.invalid', {
       details: { kind, path: result.error.issues[0]?.path.join('.') ?? '' },

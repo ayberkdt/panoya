@@ -4,6 +4,8 @@ import { createDefaultRegistry } from '@panoya/blocks';
 import { DexieBackend, WorkspaceStore } from '@panoya/storage';
 import { App } from './app/App';
 import { SaveTracker } from './app/saveTracker';
+import { SearchService } from './app/search';
+import { selectedWorkspaceId } from './app/workspaceSelection';
 import { ServicesProvider, type Services } from './app/services';
 import { WorkspaceDataProvider } from './app/workspaceData';
 import { CopyProvider } from './components/Copy';
@@ -42,12 +44,24 @@ async function boot(onBlocked: () => void): Promise<Services> {
   await backend.open();
   const store = new WorkspaceStore(backend, registry);
   const locale = initialLocale();
-  const workspace = await store.ensureWorkspace({
-    name: createI18n(locale).t('nav.workspace'),
-    locale,
-    baseCurrency: 'EUR',
-  });
-  return { store, registry, workspace, saveTracker: new SaveTracker() };
+  const selected = selectedWorkspaceId();
+  const chosen = selected
+    ? (await store.listWorkspaces()).find((w) => w.id === selected)
+    : undefined;
+  const workspace =
+    chosen ??
+    (await store.ensureWorkspace({
+      name: createI18n(locale).t('nav.workspace'),
+      locale,
+      baseCurrency: 'EUR',
+    }));
+  return {
+    store,
+    registry,
+    workspace,
+    saveTracker: new SaveTracker(),
+    search: new SearchService(store, registry, workspace.id),
+  };
 }
 
 function Root() {

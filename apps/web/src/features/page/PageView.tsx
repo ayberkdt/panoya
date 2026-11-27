@@ -12,6 +12,7 @@ import { SaveIndicator } from '../../components/SaveIndicator';
 import { useI18n } from '../../i18n';
 import { blockUiByType } from '../blocks/catalog';
 import { MoveDialog, type MoveRequest } from '../sidebar/MoveDialog';
+import { ImportDialog } from '../table/ImportDialog';
 import { AddBlockMenu } from './AddBlockMenu';
 import { BlockFrame } from './BlockFrame';
 import { BlockHost } from './BlockHost';
@@ -27,6 +28,8 @@ export function PageView({ pageId }: { pageId: string }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [slashSource, setSlashSource] = useState<string | null>(null);
   const [moveRequest, setMoveRequest] = useState<MoveRequest | null>(null);
+  // Tables are created through the import dialog (empty or from CSV), not as an empty block.
+  const [tablePlacement, setTablePlacement] = useState<Placement | null>(null);
 
   const { data: blocksData } = useStoreQuery(
     () => store.getBlocks(pageId),
@@ -55,6 +58,10 @@ export function PageView({ pageId }: { pageId: string }) {
   const onPick = async (type: string) => {
     const source = slashSource ? blocks.find((b) => b.id === slashSource) : undefined;
     setSlashSource(null);
+    if (type === 'table') {
+      setTablePlacement(source ? { kind: 'after', id: source.id } : { kind: 'end' });
+      return;
+    }
     if (source) {
       // "/" in an empty text block: the chosen block takes its place.
       const created = await insert(type, { kind: 'after', id: source.id });
@@ -221,6 +228,16 @@ export function PageView({ pageId }: { pageId: string }) {
         onPick={(type) => void onPick(type)}
       />
       <MoveDialog request={moveRequest} onClose={() => setMoveRequest(null)} />
+      <ImportDialog
+        open={tablePlacement !== null}
+        pageId={pageId}
+        placement={tablePlacement ?? { kind: 'end' }}
+        onClose={() => setTablePlacement(null)}
+        onCreated={(blockId) => {
+          setTablePlacement(null);
+          setFocusId(blockId);
+        }}
+      />
     </main>
   );
 }

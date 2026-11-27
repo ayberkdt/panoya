@@ -1,11 +1,17 @@
 /*
- * Design tokens (UX budget): 5 font sizes, 2 button styles, 1 accent hue, 2 shadows, 3 radii.
- * Spacing scale is 4-based; group-internal gaps use --s2/--s3, between groups --s5/--s6.
+ * Panoya design tokens — own identity: warm paper canvas, white page sheet, one deep sea-green
+ * accent. Budget (ux-yasalari): 5 font sizes · 2 button styles · 1 accent · 2 shadows · 4 radii.
+ * Contrast is measured by `corepack pnpm contrast` (text ≥ 4.5:1, borders/focus ≥ 3:1).
+ * Spacing scale is 4-based; group-internal gaps --s2/--s3, between groups --s5/--s6.
  */
 :root {
   color-scheme: light dark;
 
-  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
+  --font-sans:
+    'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, Roboto, 'Noto Sans', sans-serif;
+  --font-display:
+    'Segoe UI Variable Display', 'Segoe UI', system-ui, -apple-system, Roboto, 'Noto Sans',
+    sans-serif;
   --font-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace;
 
   --fs-xs: 12px;
@@ -13,7 +19,7 @@
   --fs-md: 16px;
   --fs-lg: 20px;
   --fs-xl: 28px;
-  --lh: 1.5;
+  --lh: 1.55;
 
   --s1: 4px;
   --s2: 8px;
@@ -22,53 +28,99 @@
   --s5: 24px;
   --s6: 32px;
 
-  --r-sm: 6px;
-  --r-md: 10px;
+  --r-sm: 8px; /* inputs, badges, small controls */
+  --r-btn: 10px; /* buttons */
+  --r-md: 14px; /* sheet, cards, menus, dialogs */
   --r-pill: 999px;
 
   --target: 44px;
-  --sidebar-w: 264px;
-  --reading-w: 860px;
+  --sidebar-w: 268px;
+  --reading-w: 820px;
+  --bottom-nav-h: 64px;
 
   /* light */
-  --bg: #f7f7f5;
-  --surface: #ffffff;
-  --surface-2: #f0f0ed;
-  --text: #1c1d1f;
-  --text-2: #55585e;
-  --border: #dedfdb;
-  --accent: #2f5fd0;
+  --bg: #f4f1ea; /* canvas: warm paper */
+  --surface: #ffffff; /* the page sheet, cards, dialogs */
+  --surface-2: #ece8df; /* hover, sidebar active, quiet fills */
+  --text: #1b2420;
+  --text-2: #56605b;
+  --border: #e2ddd2; /* rules and card edges (decorative) */
+  --field: #7a827d; /* form control borders (≥ 3:1) */
+  --accent: #0e6b62;
   --accent-text: #ffffff;
-  --accent-soft: #e6edfb;
+  --accent-soft: #dcefeb;
+  --accent-ink: #0b5750;
   --danger: #b3261e;
-  --warn-bg: #fff4d6;
-  --warn-text: #6b4d00;
-  --focus: #2f5fd0;
+  --warn-bg: #fbf0d0;
+  --warn-text: #5f4700;
+  --focus: #0e6b62;
 
-  --shadow-1: 0 2px 8px rgb(0 0 0 / 0.12);
-  --shadow-2: 0 12px 32px rgb(0 0 0 / 0.2);
+  /* Shadows are tinted with the ink colour, never neutral grey (reads as dirt on paper). */
+  --shadow-1: 0 1px 2px rgb(27 36 32 / 0.06), 0 4px 14px rgb(27 36 32 / 0.06);
+  --shadow-2: 0 18px 48px rgb(27 36 32 / 0.18);
 
-  --ease: cubic-bezier(0.2, 0, 0, 1);
+  /* option badges (measured: text ≥ 5.8:1 on its background) */
+  --opt-gray-bg: #ebebe8;
+  --opt-gray-fg: #45464a;
+  --opt-brown-bg: #f1e6dc;
+  --opt-brown-fg: #6b4428;
+  --opt-orange-bg: #fbe7d4;
+  --opt-orange-fg: #8a3f0a;
+  --opt-yellow-bg: #f8eec8;
+  --opt-yellow-fg: #6e5300;
+  --opt-green-bg: #dcf0e1;
+  --opt-green-fg: #1f6435;
+  --opt-blue-bg: #dde8fb;
+  --opt-blue-fg: #1d4f9e;
+  --opt-purple-bg: #ebe2f8;
+  --opt-purple-fg: #5b3596;
+  --opt-pink-bg: #f8e0ec;
+  --opt-pink-fg: #8f2a5f;
+  --opt-red-bg: #fadddb;
+  --opt-red-fg: #9e2a22;
+
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --dur: 160ms;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #1b1c1e;
-    --surface: #232427;
-    --surface-2: #2c2d31;
-    --text: #ececea;
-    --text-2: #a9abb0;
-    --border: #3a3b40;
-    --accent: #7ea2ff;
-    --accent-text: #0f1730;
-    --accent-soft: #2a3352;
+    --bg: #141917;
+    --surface: #1c2320;
+    --surface-2: #26302c;
+    --text: #e9efe9;
+    --text-2: #a3ada8;
+    --border: #2f3a35;
+    --field: #6f7a75;
+    --accent: #5fd0bf;
+    --accent-text: #082320;
+    --accent-soft: #1f3b36;
+    --accent-ink: #8fe3d6;
     --danger: #ff8a80;
     --warn-bg: #3b3220;
     --warn-text: #f3d48a;
-    --focus: #7ea2ff;
-    --shadow-1: 0 2px 8px rgb(0 0 0 / 0.5);
-    --shadow-2: 0 12px 32px rgb(0 0 0 / 0.6);
+    --focus: #5fd0bf;
+    --shadow-1: 0 1px 2px rgb(0 0 0 / 0.35), 0 4px 14px rgb(0 0 0 / 0.25);
+    --shadow-2: 0 18px 48px rgb(0 0 0 / 0.55);
+
+    --opt-gray-bg: #3a3b40;
+    --opt-gray-fg: #dadbdf;
+    --opt-brown-bg: #4a3628;
+    --opt-brown-fg: #ecd4bf;
+    --opt-orange-bg: #55361c;
+    --opt-orange-fg: #ffd2ac;
+    --opt-yellow-bg: #4c4219;
+    --opt-yellow-fg: #f6e3a1;
+    --opt-green-bg: #1f4029;
+    --opt-green-fg: #b8e8c5;
+    --opt-blue-bg: #1f3557;
+    --opt-blue-fg: #c4d8fb;
+    --opt-purple-bg: #3a2a55;
+    --opt-purple-fg: #ddccfa;
+    --opt-pink-bg: #4f2438;
+    --opt-pink-fg: #f8c8df;
+    --opt-red-bg: #562422;
+    --opt-red-fg: #ffc7c2;
   }
 }
 

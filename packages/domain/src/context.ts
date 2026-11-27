@@ -27,6 +27,8 @@ export interface BlockCatalog {
   /** Returns the canonical payload or throws a VALIDATION DomainError. */
   validate(type: string, payload: unknown): JsonValue;
   /** Rewrites internal references (page/block ids) when content is duplicated. */
+  /** Dataset ids a payload references (tables); copied on duplicate. */
+  datasetRefs?(type: string, payload: JsonValue): string[];
   remapReferences(
     type: string,
     payload: JsonValue,

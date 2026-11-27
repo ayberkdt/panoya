@@ -1,6 +1,7 @@
 import { codeBlock, checklistBlock, dividerBlock, headingBlock } from './definitions/basic';
 import { linkBlock, mailDraftBlock, quickCopyBlock } from './definitions/productivity';
 import { richTextBlock } from './definitions/richText';
+import { tableBlock } from './definitions/table';
 import { BlockRegistry } from './registry';
 
 export * from './registry';
@@ -8,6 +9,7 @@ export * from './urls';
 export * from './definitions/basic';
 export * from './definitions/productivity';
 export * from './definitions/richText';
+export * from './definitions/table';
 export * from './serialize';
 
 /** Registry with every block type implemented in this release. */
@@ -20,5 +22,6 @@ export function createDefaultRegistry(): BlockRegistry {
     .register(quickCopyBlock)
     .register(mailDraftBlock)
     .register(checklistBlock)
-    .register(codeBlock);
+    .register(codeBlock)
+    .register(tableBlock);
 }

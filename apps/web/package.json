@@ -1,6 +1,6 @@
 {
   "name": "@panoya/web",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,7 +11,9 @@
   },
   "dependencies": {
     "@panoya/blocks": "workspace:*",
+    "@panoya/data": "workspace:*",
     "@panoya/domain": "workspace:*",
+    "@panoya/search": "workspace:*",
     "@panoya/storage": "workspace:*",
     "@tiptap/core": "3.35.0",
     "@tiptap/pm": "3.35.0",

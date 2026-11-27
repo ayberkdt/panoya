@@ -33,6 +33,8 @@ export interface CommandLogEntry {
 }
 
 export interface Transaction extends ReadContext {
+  /** Every record of a kind in a workspace, trashed included (backup snapshot, import). */
+  listByWorkspace<K extends EntityKind>(kind: K, workspaceId: string): Promise<EntityOf<K>[]>;
   getWorkspace(id: string): Promise<Workspace | undefined>;
   putWorkspace(workspace: Workspace): Promise<void>;
   put(entity: Entity): Promise<void>;
@@ -56,6 +58,9 @@ export interface StorageBackend {
     workspaceId: string,
   ): Promise<EntityOf<K>[]>;
   blocksOfPage(pageId: string): Promise<EntityOf<'block'>[]>;
+  /** Every block of a workspace including trashed ones (search index build, backup). */
+  blocksOfWorkspace(workspaceId: string): Promise<EntityOf<'block'>[]>;
+  rowsOfDataset(datasetId: string): Promise<EntityOf<'datasetRow'>[]>;
   /** Every trashed record of a workspace. */
   listTrashed(workspaceId: string): Promise<Entity[]>;
   logs(workspaceId: string, limit?: number): Promise<CommandLogEntry[]>;

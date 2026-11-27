@@ -6,7 +6,10 @@ test.describe('mobile layout', () => {
   test('drawer navigation, visible copy buttons, no horizontal overflow', async ({ page }) => {
     await openApp(page);
     await expect(page.getByRole('navigation', { name: 'Çalışma alanı' })).toBeHidden();
-    await page.getByRole('button', { name: 'Menüyü aç' }).click();
+    await page
+      .getByRole('navigation', { name: 'Ana gezinme' })
+      .getByRole('button', { name: 'Sayfalar' })
+      .click();
     await expect(page.getByRole('navigation', { name: 'Çalışma alanı' })).toBeVisible();
     await loadDemo(page);
 
@@ -22,9 +25,18 @@ test.describe('mobile layout', () => {
     );
     expect(overflow).toBeLessThanOrEqual(0);
 
-    // Bottom dock quick note is reachable.
-    await expect(
-      page.locator('.mobile-dock').getByRole('button', { name: 'Hızlı not' }),
-    ).toBeVisible();
+    // Bottom navigation: quick note, search and inbox are one tap away, with 44 px targets.
+    const nav = page.getByRole('navigation', { name: 'Ana gezinme' });
+    for (const name of ['Sayfalar', 'Ara', 'Hızlı not', 'Gelen kutusu']) {
+      const item = nav.getByRole('button', { name });
+      await expect(item).toBeVisible();
+      expect((await item.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    }
+
+    // The page behind an open drawer does not scroll (scroll lock).
+    await nav.getByRole('button', { name: 'Sayfalar' }).click();
+    expect(await page.evaluate(() => getComputedStyle(document.body).overflow)).toBe('hidden');
+    await page.getByRole('button', { name: 'Menüyü kapat' }).click();
+    expect(await page.evaluate(() => getComputedStyle(document.body).overflow)).not.toBe('hidden');
   });
 });

@@ -7,3 +7,4 @@ export * from './json';
 export * from './planner';
 export * from './rank';
 export * from './tree';
+export * from './dataset';

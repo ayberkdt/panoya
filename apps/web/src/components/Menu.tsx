@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useScrollLock } from '../app/scrollLock';
 
 export interface MenuItem {
   id: string;
@@ -34,6 +35,7 @@ export function MenuButton({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
+  useScrollLock(open);
 
   useEffect(() => {
     if (!open) return;

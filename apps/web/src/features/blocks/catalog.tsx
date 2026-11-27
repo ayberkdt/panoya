@@ -6,6 +6,7 @@ import {
   Link2,
   Mail,
   Minus,
+  Table,
   Type,
   type LucideIcon,
 } from 'lucide-react';
@@ -17,6 +18,7 @@ import { MailDraftBlock } from './MailDraftBlock';
 import { QuickCopyBlock } from './QuickCopyBlock';
 import { RichTextBlock } from './RichText';
 import { ChecklistBlock, CodeBlock, DividerBlock, HeadingBlock } from './SimpleBlocks';
+import { TableBlock } from '../table/TableBlock';
 import type { BlockViewProps } from './types';
 
 export interface BlockUi {
@@ -97,6 +99,14 @@ export const blockUis: BlockUi[] = [
     category: 'productivity',
     icon: CheckSquare,
     View: ChecklistBlock as never,
+  },
+  {
+    type: 'table',
+    label: 'blockType.table',
+    synonyms: 'blockSynonyms.table',
+    category: 'data',
+    icon: Table,
+    View: TableBlock as never,
   },
 ];
 

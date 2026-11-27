@@ -19,6 +19,9 @@ import {
   type Folder,
   type Notebook,
   type Page,
+  type Dataset,
+  type DatasetRow,
+  sortByRank,
 } from '@panoya/domain';
 import type {
   CommandLogEntry,
@@ -53,7 +56,7 @@ export interface HistoryState {
 
 export interface TrashEntry {
   batchId: string;
-  root: Folder | Notebook | Page | Block;
+  root: Folder | Notebook | Page | Block | Dataset | DatasetRow;
   count: number;
   deletedAt: string;
 }
@@ -289,6 +292,15 @@ export class WorkspaceStore {
 
   async getBlocks(pageId: string): Promise<Block[]> {
     return (await this.backend.blocksOfPage(pageId)).filter((b) => b.trashed === 0);
+  }
+
+  getDataset(id: string): Promise<Dataset | undefined> {
+    return this.backend.get('dataset', id);
+  }
+
+  /** Active rows of a dataset in rank order (an immutable snapshot for views and analytics). */
+  async getRows(datasetId: string): Promise<DatasetRow[]> {
+    return sortByRank((await this.backend.rowsOfDataset(datasetId)).filter((r) => r.trashed === 0));
   }
 
   async listTrash(workspaceId: string): Promise<TrashEntry[]> {

@@ -38,7 +38,7 @@ export function AddBlockMenu({ open, onOpenChange, onPick, showButton = true }: 
     onPick(type);
   };
 
-  const groups = (['text', 'productivity'] as const)
+  const groups = (['text', 'productivity', 'data'] as const)
     .map((category) => ({ category, items: results.filter((r) => r.category === category) }))
     .filter((g) => g.items.length > 0);
 

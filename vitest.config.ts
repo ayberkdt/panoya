@@ -29,6 +29,22 @@ export default defineConfig({
       },
       {
         test: {
+          name: 'search',
+          root: './packages/search',
+          environment: 'node',
+          include: ['src/**/*.test.ts'],
+        },
+      },
+      {
+        test: {
+          name: 'data',
+          root: './packages/data',
+          environment: 'node',
+          include: ['src/**/*.test.ts'],
+        },
+      },
+      {
+        test: {
           name: 'web',
           root: './apps/web',
           environment: 'jsdom',

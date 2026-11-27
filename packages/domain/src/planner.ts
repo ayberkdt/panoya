@@ -8,7 +8,20 @@ import {
 } from './commands';
 import type { Change, Mutation, PlannerEnv, ReadContext } from './context';
 import {
+  cellProblem,
+  cellText,
+  cellValueSchema,
+  columnsValid,
+  tracksHistory,
+  DATASET_LIMITS,
+  type CellValue,
+  type DatasetColumn,
+} from './dataset';
+import {
   ENTITY_SCHEMA_VERSION,
+  parentField,
+  type Dataset,
+  type DatasetRow,
   LIMITS,
   parentIdOf,
   type Block,
@@ -21,7 +34,7 @@ import {
 } from './entities';
 import { DomainError } from './errors';
 import { jsonByteLength, type JsonValue } from './json';
-import { needsRebalance, rankBetween, ranksBetween, sortByRank } from './rank';
+import { needsRebalance, rankBetween, ranksBetween, sortByRank, type Ranked } from './rank';
 
 export function parseCommand(input: DomainCommand): ParsedCommand {
   const result = commandSchema.safeParse(input);
@@ -57,6 +70,8 @@ const childKindsOf: Record<EntityKind, readonly EntityKind[]> = {
   notebook: ['page'],
   page: ['block'],
   block: [],
+  dataset: ['datasetRow'],
+  datasetRow: [],
 };
 
 const parentKindOf: Record<EntityKind, EntityKind | null> = {
@@ -64,6 +79,8 @@ const parentKindOf: Record<EntityKind, EntityKind | null> = {
   notebook: 'folder',
   page: 'notebook',
   block: 'page',
+  dataset: null,
+  datasetRow: 'dataset',
 };
 
 class Plan {
@@ -118,6 +135,22 @@ class Plan {
         return this.trash(c);
       case 'restore':
         return this.restore(c);
+      case 'createTableBlock':
+        return this.createTableBlock(c);
+      case 'addDatasetRows':
+        return this.addDatasetRows(c);
+      case 'updateCells':
+        return this.updateCells(c);
+      case 'trashRows':
+        return this.trashRows(c);
+      case 'addColumn':
+        return this.addColumn(c);
+      case 'updateColumn':
+        return this.updateColumn(c);
+      case 'setColumnType':
+        return this.setColumnType(c);
+      case 'deleteColumn':
+        return this.deleteColumn(c);
       case 'purge':
         return this.purge(c);
     }
@@ -170,7 +203,10 @@ class Plan {
       }
     }
     const list = [...byId.values()].filter((e) => !options.activeOnly || e.trashed === 0);
-    return sortByRank(list) as EntityOf<K>[];
+    if (list.every((e) => 'rank' in e)) {
+      return sortByRank(list as unknown as Ranked[]) as unknown as EntityOf<K>[];
+    }
+    return list.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || (a.id < b.id ? -1 : 1));
   }
 
   private base(id: string) {
@@ -221,7 +257,7 @@ class Plan {
   private async requireVisibleParent(kind: EntityKind, parentId: string | null): Promise<void> {
     const parentKind = parentKindOf[kind];
     if (parentId === null) {
-      if (kind === 'page' || kind === 'block')
+      if (kind === 'page' || kind === 'block' || kind === 'datasetRow')
         throw new DomainError('VALIDATION', 'error.parent.required');
       return;
     }
@@ -396,9 +432,10 @@ class Plan {
       if (c.name.length === 0) throw new DomainError('VALIDATION', 'error.name.required');
       if (entity.title !== c.name)
         this.stage('notebook', entity, this.touch(entity, { title: c.name }));
-    } else if (entity.kind === 'page') {
-      if (entity.title !== c.name)
-        this.stage('page', entity, this.touch(entity, { title: c.name }));
+    } else if (entity.kind === 'page' || entity.kind === 'dataset') {
+      if (entity.title !== c.name) {
+        this.stage(entity.kind, entity, this.touch(entity, { title: c.name }));
+      }
     }
     this.primary = { kind: c.kind, id: c.id };
   }
@@ -426,12 +463,8 @@ class Plan {
 
     const rank = await this.allocateRank(c.kind, c.parentId, c.placement, c.id);
     const current = (await this.require(c.kind, c.id)) as Entity; // may have been re-ranked
-    const field = {
-      folder: 'parentFolderId',
-      notebook: 'folderId',
-      page: 'notebookId',
-      block: 'pageId',
-    }[c.kind];
+    const field = parentField[c.kind];
+    if (field === null) throw new DomainError('UNSUPPORTED', 'error.move.unsupported');
     this.stage(
       c.kind,
       current,
@@ -480,8 +513,9 @@ class Plan {
   private async duplicateBlock(c: CommandOf<'duplicateBlock'>): Promise<void> {
     const source = await this.require('block', c.id);
     if (source.trashed === 1) throw new DomainError('INVARIANT', 'error.entity.trashed');
+    const datasetMap = await this.copyReferencedDatasets([source]);
     const payload = this.env.blocks.isKnown(source.type)
-      ? this.env.blocks.remapReferences(source.type, source.payload, () => undefined)
+      ? this.env.blocks.remapReferences(source.type, source.payload, (ref) => datasetMap.get(ref))
       : source.payload;
     const id = this.env.ids.newId();
     const copy: Block = {
@@ -505,6 +539,9 @@ class Plan {
 
     const idMap = new Map<string, string>([[source.id, this.env.ids.newId()]]);
     for (const block of blocks) idMap.set(block.id, this.env.ids.newId());
+    // Tables get their own copy of the data, never a shared dataset (editing the copy must not
+    // change the original).
+    for (const [from, to] of await this.copyReferencedDatasets(blocks)) idMap.set(from, to);
     const map = (id: string) => idMap.get(id);
     const newPageId = idMap.get(source.id) as string;
 
@@ -626,15 +663,345 @@ class Plan {
     if (newParent.changed) {
       const rank = await this.allocateRank(root.kind, newParent.id, { kind: 'end' }, root.id);
       const staged = this.staged.get(root.id)?.after as Entity;
-      const field = {
-        folder: 'parentFolderId',
-        notebook: 'folderId',
-        page: 'notebookId',
-        block: 'pageId',
-      }[root.kind];
+      const field = parentField[root.kind];
+      if (field === null) throw new DomainError('INVARIANT', 'error.internal');
       this.stage(root.kind, staged, { ...staged, [field]: newParent.id, rank } as Entity);
     }
     this.primary = { kind: root.kind, id: root.id };
+  }
+
+  // ---------------------------------------------------------------- datasets (spec 10)
+
+  private async requireDataset(id: string): Promise<Dataset> {
+    const dataset = await this.require('dataset', id);
+    if (dataset.trashed === 1) throw new DomainError('INVARIANT', 'error.entity.trashed');
+    return dataset;
+  }
+
+  /** Validates cells against columns; any problem rejects the whole command (no partial writes). */
+  private checkCells(
+    columns: DatasetColumn[],
+    cells: Record<string, unknown>,
+    problems: { count: number },
+  ): Record<string, CellValue> {
+    const byId = new Map(columns.map((col) => [col.id, col]));
+    const out: Record<string, CellValue> = {};
+    for (const [columnId, raw] of Object.entries(cells)) {
+      const column = byId.get(columnId);
+      const parsed = cellValueSchema.safeParse(raw);
+      if (!column || !parsed.success || cellProblem(column, parsed.data) !== null) {
+        problems.count++;
+        continue;
+      }
+      if (parsed.data.kind !== 'missing') out[columnId] = parsed.data;
+    }
+    return out;
+  }
+
+  private throwIfProblems(problems: { count: number }): void {
+    if (problems.count > 0) {
+      throw new DomainError('VALIDATION', 'error.dataset.invalidCells', {
+        details: { count: problems.count },
+      });
+    }
+  }
+
+  private bumpDataset(dataset: Dataset, patch: Partial<Dataset> = {}): void {
+    const latest = (this.staged.get(dataset.id)?.after as Dataset | undefined) ?? dataset;
+    this.stage(
+      'dataset',
+      dataset,
+      this.touch(latest, { ...patch, dataRevision: latest.dataRevision + 1 }),
+    );
+  }
+
+  private tooLarge(): DomainError {
+    return new DomainError('LIMIT', 'error.dataset.tooLarge', {
+      details: { rows: DATASET_LIMITS.rows, cells: DATASET_LIMITS.cells },
+    });
+  }
+
+  private async createTableBlock(c: CommandOf<'createTableBlock'>): Promise<void> {
+    await this.requireVisibleParent('block', c.pageId);
+    if (!columnsValid(c.columns)) throw new DomainError('VALIDATION', 'error.dataset.columns');
+    if (
+      c.rows.length > DATASET_LIMITS.rows ||
+      c.rows.length * c.columns.length > DATASET_LIMITS.cells
+    ) {
+      throw this.tooLarge();
+    }
+    const datasetId = await this.newId('dataset', c.datasetId);
+    const original =
+      c.source.original !== null &&
+      c.source.original.length * 2 <= DATASET_LIMITS.originalSourceBytes
+        ? c.source.original
+        : null;
+    const dataset: Dataset = {
+      ...this.base(datasetId),
+      kind: 'dataset',
+      title: c.title,
+      columns: c.columns,
+      source: { ...c.source, original },
+      dataRevision: 1,
+    };
+    this.stage('dataset', null, dataset);
+    const problems = { count: 0 };
+    const ranks = ranksBetween(null, null, c.rows.length);
+    for (let i = 0; i < c.rows.length; i++) {
+      const row = c.rows[i] as (typeof c.rows)[number];
+      const id = row.id ?? this.env.ids.newId();
+      const record: DatasetRow = {
+        ...this.base(id),
+        kind: 'datasetRow',
+        datasetId,
+        rank: ranks[i] as string,
+        cells: this.checkCells(c.columns, row.cells, problems),
+      };
+      this.stage('datasetRow', null, record);
+    }
+    this.throwIfProblems(problems);
+    const block = await this.insertBlock(
+      c.pageId,
+      'table',
+      { datasetId, view: { sort: null } },
+      c.placement,
+      c.id,
+    );
+    this.primary = { kind: 'block', id: block.id };
+  }
+
+  private async addDatasetRows(c: CommandOf<'addDatasetRows'>): Promise<void> {
+    const dataset = await this.requireDataset(c.datasetId);
+    const existing = await this.childrenOf('datasetRow', dataset.id, { activeOnly: true });
+    if (existing.length + c.rows.length > DATASET_LIMITS.rows) throw this.tooLarge();
+    const problems = { count: 0 };
+    let placement: Placement = c.placement;
+    let lastId: string | undefined;
+    for (const row of c.rows) {
+      const id = await this.newId('datasetRow', row.id);
+      const record: DatasetRow = {
+        ...this.base(id),
+        kind: 'datasetRow',
+        datasetId: dataset.id,
+        rank: await this.allocateRank('datasetRow', dataset.id, placement, id),
+        cells: this.checkCells(dataset.columns, row.cells, problems),
+      };
+      this.stage('datasetRow', null, record);
+      lastId = id;
+      placement = { kind: 'after', id };
+    }
+    this.throwIfProblems(problems);
+    this.bumpDataset(dataset);
+    if (lastId) this.primary = { kind: 'datasetRow', id: lastId };
+  }
+
+  private async updateCells(c: CommandOf<'updateCells'>): Promise<void> {
+    const dataset = await this.requireDataset(c.datasetId);
+    const problems = { count: 0 };
+    const byRow = new Map<string, Record<string, unknown>>();
+    for (const e of c.edits) {
+      const cells = byRow.get(e.rowId) ?? {};
+      cells[e.columnId] = e.value;
+      byRow.set(e.rowId, cells);
+    }
+    for (const [rowId, edits] of byRow) {
+      const row = await this.require('datasetRow', rowId);
+      if (row.datasetId !== dataset.id || row.trashed === 1) {
+        throw new DomainError('NOT_FOUND', 'error.datasetRow.notFound');
+      }
+      const valid = this.checkCells(dataset.columns, edits, problems);
+      const cells = { ...row.cells };
+      const history = [...(row.history ?? [])];
+      for (const columnId of Object.keys(edits)) {
+        const value = valid[columnId];
+        const column = dataset.columns.find((col) => col.id === columnId);
+        const from = column ? cellText(column, row.cells[columnId]) : '';
+        if (value) cells[columnId] = value;
+        else delete cells[columnId]; // missing (invalid values were counted and reject below)
+        const to = column ? cellText(column, cells[columnId]) : '';
+        if (column && tracksHistory(column) && from !== to) {
+          history.push({
+            at: this.now,
+            columnId,
+            column: column.label,
+            from: from.slice(0, 500),
+            to: to.slice(0, 500),
+          });
+        }
+      }
+      const patch: Partial<DatasetRow> = { cells };
+      if (history.length !== (row.history ?? []).length) {
+        patch.history = history.slice(-DATASET_LIMITS.historyPerRow);
+      }
+      this.stage('datasetRow', row, this.touch(row, patch));
+    }
+    if (c.appendRows.length > 0) {
+      const existing = await this.childrenOf('datasetRow', dataset.id, { activeOnly: true });
+      if (existing.length + c.appendRows.length > DATASET_LIMITS.rows) throw this.tooLarge();
+      let placement: Placement = { kind: 'end' };
+      for (const row of c.appendRows) {
+        const id = await this.newId('datasetRow', row.id);
+        this.stage('datasetRow', null, {
+          ...this.base(id),
+          kind: 'datasetRow',
+          datasetId: dataset.id,
+          rank: await this.allocateRank('datasetRow', dataset.id, placement, id),
+          cells: this.checkCells(dataset.columns, row.cells, problems),
+        });
+        placement = { kind: 'after', id };
+      }
+    }
+    if (c.edits.length === 0 && c.appendRows.length === 0) {
+      throw new DomainError('VALIDATION', 'error.command.invalid');
+    }
+    this.throwIfProblems(problems);
+    this.bumpDataset(dataset);
+  }
+
+  private async trashRows(c: CommandOf<'trashRows'>): Promise<void> {
+    const dataset = await this.requireDataset(c.datasetId);
+    const batchId = this.env.ids.newId();
+    for (const rowId of c.rowIds) {
+      const row = await this.require('datasetRow', rowId);
+      if (row.datasetId !== dataset.id)
+        throw new DomainError('NOT_FOUND', 'error.datasetRow.notFound');
+      if (row.trashed === 1) continue;
+      this.stage(
+        'datasetRow',
+        row,
+        this.touch(row, { deletedAt: this.now, trashed: 1, deleteBatchId: batchId }),
+      );
+    }
+    this.bumpDataset(dataset);
+    this.batchId = batchId;
+  }
+
+  private async addColumn(c: CommandOf<'addColumn'>): Promise<void> {
+    const dataset = await this.requireDataset(c.datasetId);
+    const columns = [...dataset.columns];
+    const at =
+      c.index === undefined ? columns.length : Math.max(0, Math.min(c.index, columns.length));
+    columns.splice(at, 0, c.column);
+    if (!columnsValid(columns)) throw new DomainError('VALIDATION', 'error.dataset.columns');
+    this.bumpDataset(dataset, { columns });
+  }
+
+  private async updateColumn(c: CommandOf<'updateColumn'>): Promise<void> {
+    const dataset = await this.requireDataset(c.datasetId);
+    if (!dataset.columns.some((col) => col.id === c.columnId)) {
+      throw new DomainError('NOT_FOUND', 'error.datasetColumn.notFound');
+    }
+    const columns = dataset.columns.map((col) =>
+      col.id === c.columnId
+        ? {
+            ...col,
+            ...(c.label !== undefined ? { label: c.label } : {}),
+            ...(c.unit !== undefined ? { unit: c.unit } : {}),
+            ...(c.options !== undefined ? { options: c.options } : {}),
+            ...(c.trackHistory !== undefined ? { trackHistory: c.trackHistory } : {}),
+          }
+        : col,
+    );
+    if (!columnsValid(columns)) throw new DomainError('VALIDATION', 'error.dataset.columns');
+    if (c.options !== undefined) {
+      // Cells pointing at a removed option become missing (recorded by undo, never dangling).
+      const keep = new Set(c.options.map((o) => o.id));
+      for (const row of await this.childrenOf('datasetRow', dataset.id, { activeOnly: false })) {
+        const cell = row.cells[c.columnId];
+        if (cell?.kind === 'select' && !keep.has(cell.optionId)) {
+          const cells = { ...row.cells };
+          delete cells[c.columnId];
+          this.stage('datasetRow', row, this.touch(row, { cells }));
+        }
+      }
+    }
+    this.bumpDataset(dataset, { columns });
+  }
+
+  /**
+   * Type conversion: the UI previews and supplies converted values. Anything that still does not
+   * fit the new type rejects the command, unless the user chose `invalidAs: 'missing'`.
+   */
+  private async setColumnType(c: CommandOf<'setColumnType'>): Promise<void> {
+    const dataset = await this.requireDataset(c.datasetId);
+    const target = dataset.columns.find((col) => col.id === c.columnId);
+    if (!target) throw new DomainError('NOT_FOUND', 'error.datasetColumn.notFound');
+    const column: DatasetColumn = {
+      ...target,
+      type: c.columnType,
+      currency: c.columnType === 'money' ? (c.currency ?? null) : null,
+      ...(c.columnType === 'select' ? { options: c.options ?? target.options ?? [] } : {}),
+    };
+    if (c.columnType !== 'select') delete column.options;
+    const columns = dataset.columns.map((col) => (col.id === c.columnId ? column : col));
+    if (!columnsValid(columns)) throw new DomainError('VALIDATION', 'error.dataset.columns');
+    let invalid = 0;
+    for (const row of await this.childrenOf('datasetRow', dataset.id, { activeOnly: false })) {
+      const proposed = c.values[row.id] ?? row.cells[c.columnId];
+      if (proposed === undefined) continue;
+      const parsed = cellValueSchema.safeParse(proposed);
+      const ok = parsed.success && cellProblem(column, parsed.data) === null;
+      if (!ok) invalid++;
+      const cells = { ...row.cells };
+      if (ok && parsed.data.kind !== 'missing') cells[c.columnId] = parsed.data;
+      else delete cells[c.columnId];
+      this.stage('datasetRow', row, this.touch(row, { cells }));
+    }
+    if (invalid > 0 && c.invalidAs === 'reject') {
+      throw new DomainError('VALIDATION', 'error.dataset.invalidCells', {
+        details: { count: invalid },
+      });
+    }
+    this.bumpDataset(dataset, { columns });
+  }
+
+  private async deleteColumn(c: CommandOf<'deleteColumn'>): Promise<void> {
+    const dataset = await this.requireDataset(c.datasetId);
+    const columns = dataset.columns.filter((col) => col.id !== c.columnId);
+    if (columns.length === dataset.columns.length) {
+      throw new DomainError('NOT_FOUND', 'error.datasetColumn.notFound');
+    }
+    if (columns.length === 0) throw new DomainError('VALIDATION', 'error.dataset.lastColumn');
+    for (const row of await this.childrenOf('datasetRow', dataset.id, { activeOnly: false })) {
+      if (!(c.columnId in row.cells)) continue;
+      const cells = { ...row.cells };
+      delete cells[c.columnId];
+      this.stage('datasetRow', row, this.touch(row, { cells }));
+    }
+    this.bumpDataset(dataset, { columns });
+  }
+
+  /** Copies every active dataset referenced by `blocks`; returns oldId → newId. */
+  private async copyReferencedDatasets(blocks: readonly Block[]): Promise<Map<string, string>> {
+    const map = new Map<string, string>();
+    const refsOf = this.env.blocks.datasetRefs;
+    if (!refsOf) return map;
+    for (const block of blocks) {
+      if (!this.env.blocks.isKnown(block.type)) continue;
+      for (const ref of refsOf.call(this.env.blocks, block.type, block.payload)) {
+        if (map.has(ref)) continue;
+        const dataset = await this.read('dataset', ref);
+        if (!dataset || dataset.trashed === 1) continue;
+        const newId = this.env.ids.newId();
+        map.set(ref, newId);
+        this.stage('dataset', null, {
+          ...dataset,
+          ...this.base(newId),
+          kind: 'dataset',
+          dataRevision: 1,
+        });
+        for (const row of await this.childrenOf('datasetRow', dataset.id, { activeOnly: true })) {
+          const rowId = this.env.ids.newId();
+          this.stage('datasetRow', null, {
+            ...row,
+            ...this.base(rowId),
+            kind: 'datasetRow',
+            datasetId: newId,
+          });
+        }
+      }
+    }
+    return map;
   }
 
   private async purge(c: CommandOf<'purge'>): Promise<void> {

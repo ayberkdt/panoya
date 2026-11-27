@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useScrollLock } from '../app/scrollLock';
 import { useI18n } from '../i18n';
 
 interface DialogProps {
@@ -30,6 +31,7 @@ export function Dialog({
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const { t } = useI18n();
+  useScrollLock(open);
 
   useEffect(() => {
     const dialog = ref.current;

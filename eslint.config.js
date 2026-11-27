@@ -56,7 +56,15 @@ export default tseslint.config(
       '@typescript-eslint/consistent-type-imports': 'error',
     },
   },
-  { files: ['packages/domain/src/**', 'packages/blocks/src/**'], rules: pureRestrictions },
+  {
+    files: [
+      'packages/domain/src/**',
+      'packages/blocks/src/**',
+      'packages/search/src/**',
+      'packages/data/src/**',
+    ],
+    rules: pureRestrictions,
+  },
   {
     files: ['packages/storage/src/**'],
     rules: {

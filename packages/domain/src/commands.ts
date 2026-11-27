@@ -1,4 +1,12 @@
 import { z } from 'zod';
+import {
+  cellValueSchema,
+  columnIdSchema,
+  columnTypes,
+  datasetColumnSchema,
+  datasetSourceSchema,
+  selectOptionSchema,
+} from './dataset';
 import { idSchema, LIMITS } from './entities';
 
 export const placementSchema = z.discriminatedUnion('kind', [
@@ -9,8 +17,9 @@ export const placementSchema = z.discriminatedUnion('kind', [
 ]);
 export type Placement = z.infer<typeof placementSchema>;
 
-const containerKind = z.enum(['folder', 'notebook', 'page']);
-const anyKind = z.enum(['folder', 'notebook', 'page', 'block']);
+const containerKind = z.enum(['folder', 'notebook', 'page', 'dataset']);
+const anyKind = z.enum(['folder', 'notebook', 'page', 'block', 'dataset', 'datasetRow']);
+const rowInput = z.object({ id: idSchema.optional(), cells: z.record(z.string(), z.unknown()) });
 const name = z.string().trim().min(1).max(LIMITS.nameLength);
 const pageTitle = z.string().trim().max(LIMITS.nameLength);
 const ws = { workspaceId: idSchema };
@@ -93,6 +102,82 @@ export const commandSchema = z.discriminatedUnion('type', [
     targetParentId: idSchema.optional(),
   }),
   z.object({ type: z.literal('purge'), ...ws, batchId: idSchema }),
+  // ---- datasets / table blocks (spec 10)
+  z.object({
+    type: z.literal('createTableBlock'),
+    ...ws,
+    id: optionalId,
+    datasetId: optionalId,
+    pageId: idSchema,
+    placement: defaultEnd,
+    title: pageTitle,
+    columns: z.array(datasetColumnSchema),
+    rows: z.array(rowInput),
+    source: datasetSourceSchema,
+  }),
+  z.object({
+    type: z.literal('addDatasetRows'),
+    ...ws,
+    datasetId: idSchema,
+    rows: z.array(rowInput).min(1),
+    placement: defaultEnd,
+  }),
+  z.object({
+    type: z.literal('updateCells'),
+    ...ws,
+    datasetId: idSchema,
+    edits: z
+      .array(z.object({ rowId: idSchema, columnId: columnIdSchema, value: cellValueSchema }))
+      .max(200_000),
+    /** Rows appended in the same transaction (paste that extends the table). */
+    appendRows: z.array(rowInput).default([]),
+  }),
+  z.object({
+    type: z.literal('trashRows'),
+    ...ws,
+    datasetId: idSchema,
+    rowIds: z.array(idSchema).min(1),
+  }),
+  z.object({
+    type: z.literal('addColumn'),
+    ...ws,
+    datasetId: idSchema,
+    column: datasetColumnSchema,
+    index: z.number().int().nonnegative().optional(),
+  }),
+  z.object({
+    type: z.literal('updateColumn'),
+    ...ws,
+    datasetId: idSchema,
+    columnId: columnIdSchema,
+    label: z.string().trim().min(1).max(200).optional(),
+    unit: z.string().max(40).nullable().optional(),
+    /** Replaces the options of a select column; cells using a removed option become missing. */
+    options: z.array(selectOptionSchema).max(50).optional(),
+    trackHistory: z.boolean().optional(),
+  }),
+  z.object({
+    type: z.literal('setColumnType'),
+    ...ws,
+    datasetId: idSchema,
+    columnId: columnIdSchema,
+    columnType: z.enum(columnTypes),
+    currency: z
+      .string()
+      .regex(/^[A-Z]{3}$/)
+      .optional(),
+    /** Converted values by row id (from the UI preview); others keep their current cell. */
+    values: z.record(z.string(), cellValueSchema).default({}),
+    invalidAs: z.enum(['reject', 'missing']).default('reject'),
+    /** Options for a new `select` type (created from the preview). */
+    options: z.array(selectOptionSchema).max(50).optional(),
+  }),
+  z.object({
+    type: z.literal('deleteColumn'),
+    ...ws,
+    datasetId: idSchema,
+    columnId: columnIdSchema,
+  }),
 ]);
 
 export type DomainCommand = z.input<typeof commandSchema>;
@@ -112,4 +197,12 @@ export const undoableCommands: ReadonlySet<CommandType> = new Set<CommandType>([
   'duplicatePage',
   'trash',
   'restore',
+  'createTableBlock',
+  'addDatasetRows',
+  'updateCells',
+  'trashRows',
+  'addColumn',
+  'updateColumn',
+  'setColumnType',
+  'deleteColumn',
 ]);

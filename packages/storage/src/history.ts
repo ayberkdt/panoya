@@ -18,6 +18,8 @@ const childKinds: Record<EntityKind, readonly EntityKind[]> = {
   notebook: ['page'],
   page: ['block'],
   block: [],
+  dataset: ['datasetRow'],
+  datasetRow: [],
 };
 
 export function changedFields(before: Entity, after: Entity): string[] {

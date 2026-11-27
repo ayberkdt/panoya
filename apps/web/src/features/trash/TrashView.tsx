@@ -20,10 +20,14 @@ export function TrashView() {
     [workspace.id],
   );
 
-  const nameOf = (entry: TrashEntry) =>
-    entry.root.kind === 'block'
-      ? registry.plainText(entry.root).slice(0, 80) || t('blockType.richText')
-      : displayNameOf(entry.root) || t('tree.untitled');
+  const nameOf = (entry: TrashEntry): string => {
+    const root = entry.root;
+    if (root.kind === 'block')
+      return registry.plainText(root).slice(0, 80) || t('blockType.richText');
+    if (root.kind === 'dataset') return root.title || t('blockType.table');
+    if (root.kind === 'datasetRow') return t('table.rows', { count: entry.count });
+    return displayNameOf(root) || t('tree.untitled');
+  };
 
   const restore = async (entry: TrashEntry) => {
     try {

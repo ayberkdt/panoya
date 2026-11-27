@@ -107,6 +107,8 @@ export function MoveDialog({
         return notebooks;
       case 'block':
         return pages;
+      default:
+        return []; // datasets and rows are not moved through this dialog
     }
   }, [request, index, t]);
 

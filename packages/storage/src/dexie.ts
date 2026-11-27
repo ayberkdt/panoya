@@ -1,6 +1,7 @@
 import Dexie, { type Table } from 'dexie';
 import {
   ENTITY_SCHEMA_VERSION,
+  parentField,
   parentIdOf,
   validateEntity,
   type Entity,
@@ -22,7 +23,11 @@ const tableOf = {
   notebook: 'notebooks',
   page: 'pages',
   block: 'blocks',
+  dataset: 'datasets',
+  datasetRow: 'datasetRows',
 } as const;
+
+const ALL_KINDS = ['folder', 'notebook', 'page', 'block', 'dataset', 'datasetRow'] as const;
 
 interface MetaRow {
   key: string;
@@ -40,6 +45,8 @@ export class PanoyaDatabase extends Dexie {
   notebooks!: Table<EntityOf<'notebook'>, string>;
   pages!: Table<EntityOf<'page'>, string>;
   blocks!: Table<EntityOf<'block'>, string>;
+  datasets!: Table<EntityOf<'dataset'>, string>;
+  datasetRows!: Table<EntityOf<'datasetRow'>, string>;
   commandLog!: Table<CommandLogEntry, string>;
   meta!: Table<MetaRow, string>;
   migrationBackup!: Table<
@@ -60,6 +67,11 @@ export class PanoyaDatabase extends Dexie {
       /** Original rows rewritten by a record migration (spec 00: save originals first). */
       migrationBackup: '++seq, table, id',
     });
+    // v2 (G3): typed datasets for table blocks. Additive: existing rows are untouched.
+    this.version(2).stores({
+      datasets: 'id, workspaceId, deleteBatchId',
+      datasetRows: 'id, workspaceId, datasetId, deleteBatchId',
+    });
     // A brand-new database contains only current records.
     this.on('populate', (tx) => {
       void tx.table('meta').put({ key: RECORDS_VERSION_KEY, value: ENTITY_SCHEMA_VERSION });
@@ -75,10 +87,19 @@ const allTables = [
   'notebooks',
   'pages',
   'blocks',
+  'datasets',
+  'datasetRows',
   'commandLog',
   'meta',
 ] as const;
-const recordTables = ['folders', 'notebooks', 'pages', 'blocks'] as const;
+const recordTables = [
+  'folders',
+  'notebooks',
+  'pages',
+  'blocks',
+  'datasets',
+  'datasetRows',
+] as const;
 
 export interface DexieBackendOptions {
   /** Database name; one per local profile/account namespace. */
@@ -161,6 +182,10 @@ export class DexieBackend implements StorageBackend {
       async () => {
         const tx: Transaction = {
           hasWorkspace: async (id) => (await db.workspaces.get(id)) !== undefined,
+          listByWorkspace: async <K extends EntityKind>(kind: K, workspaceId: string) => {
+            const rows = await this.table(kind).where('workspaceId').equals(workspaceId).toArray();
+            return rows.map((r) => this.read<K>(r));
+          },
           getWorkspace: async (id) => {
             const raw = await db.workspaces.get(id);
             return raw === undefined ? undefined : workspaceSchema.parse(migrateWorkspace(raw));
@@ -178,15 +203,10 @@ export class DexieBackend implements StorageBackend {
             parentId: string | null,
           ) => {
             let rows: unknown[];
-            if (parentId === null) {
+            const field = parentField[kind];
+            if (parentId === null || field === null) {
               rows = await this.table(kind).where('workspaceId').equals(workspaceId).toArray();
             } else {
-              const field = {
-                folder: 'parentFolderId',
-                notebook: 'folderId',
-                page: 'notebookId',
-                block: 'pageId',
-              }[kind];
               rows = await this.table(kind).where(field).equals(parentId).toArray();
             }
             return rows
@@ -195,7 +215,7 @@ export class DexieBackend implements StorageBackend {
           },
           byBatch: async (workspaceId, batchId) => {
             const out: Entity[] = [];
-            for (const kind of ['folder', 'notebook', 'page', 'block'] as const) {
+            for (const kind of ALL_KINDS) {
               const rows = await this.table(kind).where('deleteBatchId').equals(batchId).toArray();
               out.push(
                 ...rows.map((r) => this.read(r)).filter((e) => e.workspaceId === workspaceId),
@@ -260,9 +280,19 @@ export class DexieBackend implements StorageBackend {
     return rows.map((r) => this.read<'block'>(r));
   }
 
+  async blocksOfWorkspace(workspaceId: string): Promise<EntityOf<'block'>[]> {
+    const rows = await this.db.blocks.where('workspaceId').equals(workspaceId).toArray();
+    return rows.map((r) => this.read<'block'>(r));
+  }
+
+  async rowsOfDataset(datasetId: string): Promise<EntityOf<'datasetRow'>[]> {
+    const rows = await this.db.datasetRows.where('datasetId').equals(datasetId).toArray();
+    return rows.map((r) => this.read<'datasetRow'>(r));
+  }
+
   async listTrashed(workspaceId: string): Promise<Entity[]> {
     const out: Entity[] = [];
-    for (const kind of ['folder', 'notebook', 'page', 'block'] as const) {
+    for (const kind of ALL_KINDS) {
       // Only trashed records carry a deleteBatchId, so the index contains exactly the trash.
       const rows = await this.table(kind).where('deleteBatchId').above('').toArray();
       out.push(...rows.map((r) => this.read(r)).filter((e) => e.workspaceId === workspaceId));

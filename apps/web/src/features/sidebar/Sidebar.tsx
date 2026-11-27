@@ -1,7 +1,23 @@
-import { BookOpen, FolderPlus, Inbox, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
+import {
+  BookOpen,
+  Check,
+  ChevronDown,
+  ClipboardList,
+  Download,
+  FolderPlus,
+  Inbox,
+  Plus,
+  Search,
+  Sparkles,
+  Trash2,
+  Upload,
+  X,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { navigate } from '../../app/router';
-import { useRunCommand, useServices } from '../../app/services';
+import { useRunCommand, useServices, useStoreQuery } from '../../app/services';
+import { switchWorkspace } from '../../app/workspaceSelection';
+import { ExportBackupDialog, RestoreBackupDialog } from '../backup/BackupDialogs';
 import { useWorkspaceIndex } from '../../app/workspaceData';
 import { MenuButton } from '../../components/Menu';
 import { useI18n } from '../../i18n';
@@ -16,6 +32,8 @@ interface Props {
   onOpenInbox: () => void;
   onLoadDemo: () => void;
   onNavigate: () => void;
+  /** Phone drawer: close button. */
+  onClose: () => void;
 }
 
 export function Sidebar({
@@ -26,6 +44,7 @@ export function Sidebar({
   onOpenInbox,
   onLoadDemo,
   onNavigate,
+  onClose,
 }: Props) {
   const { t } = useI18n();
   const { workspace } = useServices();
@@ -33,6 +52,13 @@ export function Sidebar({
   const run = useRunCommand();
   const [moveRequest, setMoveRequest] = useState<MoveRequest | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [backupDialog, setBackupDialog] = useState<'export' | 'restore' | null>(null);
+  const { store, saveTracker } = useServices();
+  const { data: workspaces } = useStoreQuery(
+    () => store.listWorkspaces(),
+    () => false,
+    [],
+  );
 
   const reveal = useMemo(() => {
     const ids = activePageId
@@ -65,7 +91,44 @@ export function Sidebar({
   return (
     <nav className="sidebar" aria-label={t('nav.workspace')}>
       <div className="sidebar-head">
-        <span className="brand">{t('app.name')}</span>
+        <MenuButton
+          label={t('workspace.menu')}
+          className="brand-btn"
+          align="start"
+          items={[
+            ...(workspaces ?? []).map((w) => ({
+              id: `ws-${w.id}`,
+              label: w.name,
+              icon:
+                w.id === workspace.id ? <Check size={16} /> : <span className="menu-icon-spacer" />,
+              onSelect: () => {
+                if (w.id !== workspace.id)
+                  void saveTracker.flushAll().then(() => switchWorkspace(w.id));
+              },
+            })),
+            {
+              id: 'export',
+              label: t('backup.exportTitle'),
+              icon: <Download size={16} />,
+              onSelect: () => setBackupDialog('export'),
+            },
+            {
+              id: 'restore',
+              label: t('backup.restoreTitle'),
+              icon: <Upload size={16} />,
+              onSelect: () => setBackupDialog('restore'),
+            },
+          ]}
+        >
+          <span className="brand-mark" aria-hidden="true">
+            <ClipboardList size={16} />
+          </span>
+          <span className="brand-text">
+            <span className="brand">{t('app.name')}</span>
+            <span className="brand-ws">{workspace.name}</span>
+          </span>
+          <ChevronDown size={14} aria-hidden="true" />
+        </MenuButton>
         <MenuButton
           label={t('nav.new')}
           items={[
@@ -85,6 +148,14 @@ export function Sidebar({
         >
           <Plus size={18} aria-hidden="true" />
         </MenuButton>
+        <button
+          type="button"
+          className="icon-btn drawer-close"
+          aria-label={t('nav.closeMenu')}
+          onClick={onClose}
+        >
+          <X size={20} aria-hidden="true" />
+        </button>
       </div>
 
       <button type="button" className="btn btn-primary sidebar-capture" onClick={onCapture}>
@@ -152,6 +223,11 @@ export function Sidebar({
         )}
       </div>
       <MoveDialog request={moveRequest} onClose={() => setMoveRequest(null)} />
+      <ExportBackupDialog open={backupDialog === 'export'} onClose={() => setBackupDialog(null)} />
+      <RestoreBackupDialog
+        open={backupDialog === 'restore'}
+        onClose={() => setBackupDialog(null)}
+      />
     </nav>
   );
 }

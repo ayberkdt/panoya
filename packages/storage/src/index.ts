@@ -1,3 +1,4 @@
+export * from './backup';
 export * from './autosave';
 export * from './backend';
 export * from './dexie';

@@ -13,12 +13,14 @@ import type { ChangeSet, CommandResult, WorkspaceStore } from '@panoya/storage';
 import { useI18n } from '../i18n';
 import { useToast } from '../components/Toasts';
 import type { SaveTracker } from './saveTracker';
+import type { SearchService } from './search';
 
 export interface Services {
   store: WorkspaceStore;
   registry: BlockRegistry;
   workspace: Workspace;
   saveTracker: SaveTracker;
+  search: SearchService;
 }
 
 const ServicesContext = createContext<Services | null>(null);

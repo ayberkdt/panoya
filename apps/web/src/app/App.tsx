@@ -1,4 +1,4 @@
-import { Menu, Plus, Search, X } from 'lucide-react';
+import { BookOpen, Inbox, Plus, Search } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { ConfirmDialog } from '../components/Dialog';
 import { useToast } from '../components/Toasts';
@@ -6,6 +6,7 @@ import { QuickCapture } from '../features/capture/QuickCapture';
 import { ensureInboxPage } from '../features/capture/inbox';
 import { createDemo } from '../features/demo/demo';
 import { prefetchRichTextEditor } from '../features/blocks/RichText';
+import { HomeView } from '../features/home/HomeView';
 import { PageView } from '../features/page/PageView';
 import { CommandPalette } from '../features/palette/CommandPalette';
 import { Sidebar } from '../features/sidebar/Sidebar';
@@ -13,6 +14,7 @@ import { TrashView } from '../features/trash/TrashView';
 import { useI18n, type UiLocale } from '../i18n';
 import { useHistoryActions } from './actions';
 import { lastPage, navigate, useRoute } from './router';
+import { useScrollLock } from './scrollLock';
 import { useServices } from './services';
 import { useWorkspaceIndex } from './workspaceData';
 
@@ -34,8 +36,14 @@ export function App({ onLocaleChange }: { onLocaleChange: (locale: UiLocale) => 
   const [demoOpen, setDemoOpen] = useState(false);
 
   const activePageId = route.name === 'page' ? route.pageId : null;
+  useScrollLock(drawerOpen);
 
   useEffect(() => prefetchRichTextEditor(), []);
+  const { search } = useServices();
+  useEffect(() => {
+    search.start();
+    return () => search.stop();
+  }, [search]);
 
   // Deep links from another workspace id are not valid here; fall back to home.
   useEffect(() => {
@@ -131,24 +139,7 @@ export function App({ onLocaleChange }: { onLocaleChange: (locale: UiLocale) => 
         {t('nav.skipToContent')}
       </a>
       <header className="mobile-bar">
-        <button
-          type="button"
-          className="icon-btn"
-          aria-label={drawerOpen ? t('nav.closeMenu') : t('nav.openMenu')}
-          aria-expanded={drawerOpen}
-          onClick={() => setDrawerOpen((v) => !v)}
-        >
-          {drawerOpen ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}
-        </button>
         <span className="mobile-title">{pageTitle}</span>
-        <button
-          type="button"
-          className="icon-btn"
-          aria-label={t('nav.search')}
-          onClick={() => setPaletteOpen(true)}
-        >
-          <Search size={20} aria-hidden="true" />
-        </button>
       </header>
 
       <div className="drawer-scrim" aria-hidden="true" onClick={() => setDrawerOpen(false)} />
@@ -161,6 +152,7 @@ export function App({ onLocaleChange }: { onLocaleChange: (locale: UiLocale) => 
           onOpenInbox={() => void openInbox()}
           onLoadDemo={() => setDemoOpen(true)}
           onNavigate={() => setDrawerOpen(false)}
+          onClose={() => setDrawerOpen(false)}
         />
       </aside>
 
@@ -170,19 +162,39 @@ export function App({ onLocaleChange }: { onLocaleChange: (locale: UiLocale) => 
         ) : route.name === 'trash' ? (
           <TrashView />
         ) : (
-          <main className="page page-message" id="main">
-            <h1>{t('page.welcome.title')}</h1>
-            <p>{t('page.welcome.body')}</p>
-          </main>
+          <HomeView
+            onCapture={() => setCaptureOpen(true)}
+            onSearch={() => setPaletteOpen(true)}
+            onLoadDemo={() => setDemoOpen(true)}
+          />
         )}
       </div>
 
-      <div className="mobile-dock">
-        <button type="button" className="btn btn-primary" onClick={() => setCaptureOpen(true)}>
-          <Plus size={18} aria-hidden="true" />
+      <nav className="bottom-nav" aria-label={t('nav.mobile')}>
+        <button
+          type="button"
+          className={`bottom-nav-item${drawerOpen ? ' is-active' : ''}`}
+          aria-expanded={drawerOpen}
+          onClick={() => setDrawerOpen((v) => !v)}
+        >
+          <BookOpen size={20} aria-hidden="true" />
+          <span>{t('nav.pages')}</span>
+        </button>
+        <button type="button" className="bottom-nav-item" onClick={() => setPaletteOpen(true)}>
+          <Search size={20} aria-hidden="true" />
+          <span>{t('nav.search')}</span>
+        </button>
+        <button type="button" className="bottom-nav-item" onClick={() => setCaptureOpen(true)}>
+          <span className="bottom-nav-primary" aria-hidden="true">
+            <Plus size={22} />
+          </span>
           <span>{t('capture.open')}</span>
         </button>
-      </div>
+        <button type="button" className="bottom-nav-item" onClick={() => void openInbox()}>
+          <Inbox size={20} aria-hidden="true" />
+          <span>{t('nav.inbox')}</span>
+        </button>
+      </nav>
 
       <QuickCapture open={captureOpen} onClose={() => setCaptureOpen(false)} />
       <CommandPalette

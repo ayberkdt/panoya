@@ -1,0 +1,576 @@
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  FileDown,
+  MoreHorizontal,
+  Plus,
+  TableProperties,
+  X,
+} from 'lucide-react';
+import { useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
+import {
+  exportDataset,
+  formatCell,
+  parseCell,
+  parseDelimited,
+  type DataLocale,
+} from '@panoya/data';
+import type { TablePayload } from '@panoya/blocks';
+import {
+  tracksHistory,
+  type CellValue,
+  type Dataset,
+  type DatasetColumn,
+  type DatasetRow,
+} from '@panoya/domain';
+import { useRunCommand, useServices, useStoreQuery } from '../../app/services';
+import { CopyButton, useCopy } from '../../components/Copy';
+import { MenuButton } from '../../components/Menu';
+import { useToast } from '../../components/Toasts';
+import { useI18n } from '../../i18n';
+import type { BlockViewProps } from '../blocks/types';
+import { CellEditor } from './CellEditor';
+import { ColumnDialog, type ColumnDialogState } from './ColumnDialog';
+import { OptionBadge } from './OptionBadge';
+import { RowDialog } from './RowDialog';
+import {
+  columnTypeKey,
+  downloadText,
+  filterRows,
+  isNumericColumn,
+  optionCounts,
+  safeFilename,
+  sortRows,
+  type FilterSpec,
+  type SortSpec,
+} from './tableUtils';
+
+const PAGE = 200;
+
+/** Header text with unit/currency (written once, not in every cell — datawiz T12). */
+function headerLabel(column: DatasetColumn): string {
+  const unit = column.type === 'money' ? column.currency : column.unit;
+  return unit ? `${column.label} (${unit})` : column.label;
+}
+
+export function TableBlock({ block, payload }: BlockViewProps<TablePayload>) {
+  const { store, workspace } = useServices();
+  const run = useRunCommand();
+  const toast = useToast();
+  const copy = useCopy();
+  const { t, locale } = useI18n();
+  const dataLocale = locale as DataLocale;
+  const datasetId = payload.datasetId;
+  const { data } = useStoreQuery(
+    async () => {
+      const [dataset, rows] = await Promise.all([
+        store.getDataset(datasetId),
+        store.getRows(datasetId),
+      ]);
+      return { dataset, rows };
+    },
+    (change) => change.ids.has(datasetId),
+    [datasetId],
+  );
+  const [focus, setFocus] = useState<{ r: number; c: number }>({ r: 0, c: 0 });
+  const [editing, setEditing] = useState<{
+    rowId: string;
+    columnId: string;
+    initialText?: string;
+  } | null>(null);
+  const [limit, setLimit] = useState(PAGE);
+  const [rowDialog, setRowDialog] = useState<string | null>(null);
+  const [columnDialog, setColumnDialog] = useState<ColumnDialogState | null>(null);
+  const gridRef = useRef<HTMLTableElement>(null);
+  const wasFocused = useRef(false);
+
+  const sort: SortSpec = payload.view.sort;
+  const filter: FilterSpec = payload.view.filter ?? null;
+  const dataset = data?.dataset;
+  const allRows = useMemo(() => data?.rows ?? [], [data?.rows]);
+  const rows = useMemo(
+    () => sortRows(filterRows(allRows, filter), sort, dataset?.columns ?? []),
+    [allRows, filter, sort, dataset?.columns],
+  );
+
+  if (!data) return <div className="table-loading" aria-busy="true" />;
+  if (!dataset || dataset.trashed === 1) {
+    return <p className="hint-warn">{t('table.missingDataset')}</p>;
+  }
+
+  const columns = dataset.columns;
+  const visible = rows.slice(0, limit);
+  const missingCount = rows.reduce(
+    (n, r) => n + columns.filter((c) => r.cells[c.id] === undefined).length,
+    0,
+  );
+  // Counts + filter bar only for status columns (history tracked), not every choice column.
+  const selectColumns = columns.filter(
+    (c) => c.type === 'select' && (c.options ?? []).length > 0 && tracksHistory(c),
+  );
+
+  const setView = (view: Partial<TablePayload['view']>) =>
+    void run({
+      type: 'updateBlock',
+      workspaceId: workspace.id,
+      id: block.id,
+      expectedRevision: block.localRevision,
+      payload: { ...payload, view: { ...payload.view, ...view } },
+    });
+
+  const toggleSort = (columnId: string) => {
+    const next: SortSpec =
+      sort?.columnId !== columnId
+        ? { columnId, direction: 'asc' }
+        : sort.direction === 'asc'
+          ? { columnId, direction: 'desc' }
+          : null;
+    setView({ sort: next });
+  };
+
+  const focusCell = (r: number, c: number) => {
+    const rr = Math.max(0, Math.min(r, visible.length - 1));
+    const cc = Math.max(0, Math.min(c, columns.length - 1));
+    setFocus({ r: rr, c: cc });
+    requestAnimationFrame(() =>
+      gridRef.current?.querySelector<HTMLElement>(`[data-cell="${rr}:${cc}"]`)?.focus(),
+    );
+  };
+
+  const commitCell = async (
+    row: DatasetRow,
+    column: DatasetColumn,
+    value: CellValue,
+    move: 'down' | 'right' | 'none',
+  ) => {
+    setEditing(null);
+    const before = row.cells[column.id];
+    if (JSON.stringify(before ?? { kind: 'missing' }) !== JSON.stringify(value)) {
+      await run({
+        type: 'updateCells',
+        workspaceId: workspace.id,
+        datasetId,
+        edits: [{ rowId: row.id, columnId: column.id, value }],
+      });
+    }
+    const r = visible.indexOf(row);
+    const c = columns.indexOf(column);
+    if (move === 'down') focusCell(r + 1, c);
+    else if (move === 'right') focusCell(r, c + 1);
+    else focusCell(r, c);
+  };
+
+  const addRow = async () => {
+    // A new row inherits the active filter's choice so it stays visible.
+    const cells: Record<string, CellValue> =
+      filter && filter.optionId
+        ? { [filter.columnId]: { kind: 'select', optionId: filter.optionId } }
+        : {};
+    const result = await run({
+      type: 'addDatasetRows',
+      workspaceId: workspace.id,
+      datasetId,
+      rows: [{ cells }],
+    });
+    const id = result?.mutation.primary?.id;
+    if (id && columns[0]) {
+      if (sort) toast.show({ message: t('table.addedSorted') });
+      setLimit((l) => Math.max(l, rows.length + 1));
+      setEditing({ rowId: id, columnId: columns[0].id });
+    }
+  };
+
+  const onGridKeyDown = (e: KeyboardEvent<HTMLTableElement>) => {
+    if (editing || (e.target as HTMLElement).tagName === 'BUTTON') return;
+    const { r, c } = focus;
+    const row = visible[r];
+    const column = columns[c];
+    const mod = e.ctrlKey || e.metaKey;
+    if (e.key === 'ArrowDown') focusCell(r + 1, c);
+    else if (e.key === 'ArrowUp') focusCell(r - 1, c);
+    else if (e.key === 'ArrowRight') focusCell(r, c + 1);
+    else if (e.key === 'ArrowLeft') focusCell(r, c - 1);
+    else if (mod && e.key.toLowerCase() === 'c' && row && column) {
+      void copy({ plain: formatCell(row.cells[column.id], dataLocale, column), format: 'plain' });
+    } else if ((e.key === 'Enter' || e.key === 'F2') && row && column) {
+      setEditing({ rowId: row.id, columnId: column.id });
+    } else if (
+      (e.key === 'Delete' || e.key === 'Backspace') &&
+      row &&
+      column &&
+      row.cells[column.id]
+    ) {
+      void commitCell(row, column, { kind: 'missing' }, 'none');
+    } else if (
+      e.key.length === 1 &&
+      !mod &&
+      !e.altKey &&
+      row &&
+      column &&
+      column.type !== 'boolean' &&
+      column.type !== 'select'
+    ) {
+      setEditing({ rowId: row.id, columnId: column.id, initialText: e.key });
+    } else return;
+    e.preventDefault();
+  };
+
+  /** Rectangular TSV paste from the focused cell; validated first, then one atomic command. */
+  const onPaste = async (e: ClipboardEvent<HTMLElement>) => {
+    const text = e.clipboardData.getData('text/plain');
+    if (!text) return;
+    // Single values typed into an open cell editor paste normally; rectangles go to the grid.
+    if (editing && !/[\t\n]/.test(text.replace(/\r?\n$/, ''))) return;
+    e.preventDefault();
+    if (editing) {
+      setEditing(null);
+      e.stopPropagation();
+    }
+    let grid: string[][];
+    try {
+      grid = parseDelimited(text, { delimiter: '\t' }).rows;
+    } catch {
+      return;
+    }
+    const edits: { rowId: string; columnId: string; value: CellValue }[] = [];
+    const appendRows: { cells: Record<string, CellValue> }[] = [];
+    let invalid = 0;
+    grid.forEach((line, i) => {
+      const target = visible[focus.r + i];
+      const cells: Record<string, CellValue> = {};
+      line.forEach((raw, j) => {
+        const column = columns[focus.c + j];
+        if (!column) return;
+        const outcome = parseCell(raw, column, dataLocale);
+        if (!outcome.ok) {
+          invalid++;
+          return;
+        }
+        if (target) edits.push({ rowId: target.id, columnId: column.id, value: outcome.value });
+        else if (outcome.value.kind !== 'missing') cells[column.id] = outcome.value;
+      });
+      if (!target) appendRows.push({ cells });
+    });
+    if (invalid > 0) {
+      toast.show({ message: t('table.pasteRejected', { count: invalid }), tone: 'error' });
+      return;
+    }
+    if (edits.length || appendRows.length) {
+      await run({ type: 'updateCells', workspaceId: workspace.id, datasetId, edits, appendRows });
+    }
+  };
+
+  const exportCsv = (safe: boolean) => {
+    const result = exportDataset(columns, rows, {
+      delimiter: dataLocale === 'tr-TR' ? ';' : ',',
+      safe,
+      bom: true,
+    });
+    downloadText(safeFilename(dataset.title || t('blockType.table'), 'csv'), result.text);
+    toast.show({
+      message:
+        result.neutralized > 0
+          ? t('table.exportNeutralized', { count: result.neutralized })
+          : t('table.exported'),
+    });
+  };
+
+  const renderCell = (cell: CellValue | undefined, column: DatasetColumn) => {
+    if (cell === undefined) {
+      return (
+        <span className="cell-missing" aria-label={t('table.missing')}>
+          —
+        </span>
+      );
+    }
+    if (cell.kind === 'select') {
+      const option = column.options?.find((o) => o.id === cell.optionId);
+      return option ? <OptionBadge label={option.label} color={option.color} /> : '—';
+    }
+    // Money shows the amount only; the currency is written once in the header (T12).
+    if (cell.kind === 'money')
+      return formatCell({ kind: 'decimal', value: cell.amount }, dataLocale);
+    return formatCell(cell, dataLocale, column);
+  };
+
+  return (
+    <div className="table-block">
+      <div className="table-head">
+        <DatasetTitle dataset={dataset} />
+        <div className="block-actions">
+          <CopyButton
+            getText={() => exportDataset(columns, rows, { delimiter: '\t', lineEnding: '\n' }).text}
+            label={t('table.copyTsv')}
+            variant="icon"
+            disabled={rows.length === 0}
+          />
+          <MenuButton
+            label={t('table.more')}
+            items={[
+              {
+                id: 'addcol',
+                label: t('table.addColumn'),
+                icon: <TableProperties size={16} />,
+                onSelect: () => setColumnDialog({ mode: 'add' }),
+              },
+              {
+                id: 'csv',
+                label: t('table.exportCsv'),
+                icon: <FileDown size={16} />,
+                onSelect: () => exportCsv(true),
+              },
+              {
+                id: 'csvraw',
+                label: t('table.exportCsvRaw'),
+                icon: <FileDown size={16} />,
+                onSelect: () => exportCsv(false),
+              },
+            ]}
+          >
+            <MoreHorizontal size={18} aria-hidden="true" />
+          </MenuButton>
+        </div>
+      </div>
+
+      {selectColumns.map((column) => (
+        <div
+          key={column.id}
+          className="status-bar"
+          role="group"
+          aria-label={t('table.statusOf', { column: column.label })}
+        >
+          <span className="status-label">{column.label}</span>
+          {optionCounts(allRows, column).map(({ optionId, count }) => {
+            const option = column.options?.find((o) => o.id === optionId);
+            const active = filter?.columnId === column.id && filter.optionId === optionId;
+            return (
+              <button
+                key={optionId ?? 'empty'}
+                type="button"
+                className={`status-chip${active ? ' is-active' : ''}`}
+                aria-pressed={active}
+                onClick={() =>
+                  setView({ filter: active ? null : { columnId: column.id, optionId } })
+                }
+              >
+                <OptionBadge
+                  label={option?.label ?? t('table.emptyChoice')}
+                  color={option?.color ?? 'gray'}
+                  empty={!option}
+                />
+                <span className="status-count">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      ))}
+      {filter && (
+        <p className="filter-note">
+          <span>{t('table.filtered', { shown: rows.length, total: allRows.length })}</span>
+          <button
+            type="button"
+            className="btn btn-ghost btn-small"
+            onClick={() => setView({ filter: null })}
+          >
+            <X size={14} aria-hidden="true" />
+            <span>{t('table.clearFilter')}</span>
+          </button>
+        </p>
+      )}
+
+      <div
+        className="table-scroll"
+        role="region"
+        aria-label={dataset.title || t('blockType.table')}
+        tabIndex={-1}
+      >
+        <table
+          ref={gridRef}
+          className="grid"
+          onKeyDown={onGridKeyDown}
+          onPaste={(e) => void onPaste(e)}
+          aria-rowcount={rows.length + 1}
+        >
+          <thead>
+            <tr>
+              <th scope="col" className="row-head">
+                <span className="sr-only">{t('table.rowNumber')}</span>
+              </th>
+              {columns.map((column) => {
+                const sorted = sort?.columnId === column.id ? sort.direction : null;
+                return (
+                  <th
+                    key={column.id}
+                    scope="col"
+                    className={isNumericColumn(column) ? 'num' : undefined}
+                    aria-sort={
+                      sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : 'none'
+                    }
+                  >
+                    <span className="th-inner">
+                      <button
+                        type="button"
+                        className="th-label"
+                        title={t(columnTypeKey[column.type])}
+                        onClick={() => setColumnDialog({ mode: 'edit', columnId: column.id })}
+                      >
+                        {headerLabel(column)}
+                      </button>
+                      <button
+                        type="button"
+                        className="th-sort"
+                        aria-label={t('table.sortBy', { column: column.label })}
+                        onClick={() => toggleSort(column.id)}
+                      >
+                        {sorted === 'asc' ? (
+                          <ArrowUp size={14} />
+                        ) : sorted === 'desc' ? (
+                          <ArrowDown size={14} />
+                        ) : (
+                          <ArrowUpDown size={14} />
+                        )}
+                      </button>
+                    </span>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((row, r) => (
+              <tr key={row.id}>
+                <th scope="row" className="row-head">
+                  <button
+                    type="button"
+                    className="row-num"
+                    aria-label={t('table.editRow', { n: r + 1 })}
+                    onClick={() => setRowDialog(row.id)}
+                  >
+                    {r + 1}
+                  </button>
+                </th>
+                {columns.map((column, c) => {
+                  const cell = row.cells[column.id];
+                  const isEditing = editing?.rowId === row.id && editing.columnId === column.id;
+                  const focused = focus.r === r && focus.c === c;
+                  return (
+                    <td
+                      key={column.id}
+                      data-cell={`${r}:${c}`}
+                      tabIndex={focused && !isEditing ? 0 : -1}
+                      className={`${isNumericColumn(column) ? 'num' : ''}${isEditing ? ' is-editing' : ''}`}
+                      onFocus={() => setFocus({ r, c })}
+                      onMouseDown={() => {
+                        // First click selects; a click on the already selected cell edits.
+                        wasFocused.current = focused;
+                      }}
+                      onDoubleClick={() => setEditing({ rowId: row.id, columnId: column.id })}
+                      onClick={() => {
+                        if (wasFocused.current && !isEditing)
+                          setEditing({ rowId: row.id, columnId: column.id });
+                      }}
+                    >
+                      {isEditing ? (
+                        <CellEditor
+                          column={column}
+                          cell={cell}
+                          locale={dataLocale}
+                          {...(editing.initialText !== undefined
+                            ? { initialText: editing.initialText }
+                            : {})}
+                          onCommit={(value, move) => void commitCell(row, column, value, move)}
+                          onCancel={(reason) => {
+                            setEditing(null);
+                            if (reason === 'invalid')
+                              toast.show({ message: t('table.notSavedInvalid'), tone: 'error' });
+                            focusCell(r, c);
+                          }}
+                        />
+                      ) : (
+                        renderCell(cell, column)
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="table-foot">
+        {/* Ghost: the page's "Blok ekle" is the view's single filled primary (Von Restorff). */}
+        <button type="button" className="btn btn-ghost btn-small" onClick={() => void addRow()}>
+          <Plus size={16} aria-hidden="true" />
+          <span>{t('table.addRow')}</span>
+        </button>
+        <span className="muted small">
+          {t('table.summary', { rows: rows.length, missing: missingCount })}
+          {sort ? ` · ${t('table.sortedView')}` : ''}
+        </span>
+        {rows.length > limit && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-small"
+            onClick={() => setLimit((l) => l + PAGE)}
+          >
+            {t('table.showMore', { count: Math.min(PAGE, rows.length - limit) })}
+          </button>
+        )}
+      </div>
+
+      {rowDialog && (
+        <RowDialog
+          dataset={dataset}
+          row={allRows.find((r) => r.id === rowDialog) ?? null}
+          locale={dataLocale}
+          onClose={() => setRowDialog(null)}
+        />
+      )}
+      {columnDialog && (
+        <ColumnDialog
+          dataset={dataset}
+          rows={allRows}
+          state={columnDialog}
+          locale={dataLocale}
+          onClose={() => setColumnDialog(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function DatasetTitle({ dataset }: { dataset: Dataset }) {
+  const { t } = useI18n();
+  const { workspace } = useServices();
+  const run = useRunCommand();
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = async () => {
+    if (draft === null) return;
+    const name = draft.trim();
+    if (name !== dataset.title)
+      await run({
+        type: 'rename',
+        workspaceId: workspace.id,
+        kind: 'dataset',
+        id: dataset.id,
+        name,
+      });
+    setDraft(null);
+  };
+  return (
+    <input
+      className="input input-quiet table-title"
+      aria-label={t('table.title')}
+      placeholder={t('table.title')}
+      value={draft ?? dataset.title}
+      maxLength={200}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => void commit()}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && !e.nativeEvent.isComposing) e.currentTarget.blur();
+      }}
+    />
+  );
+}

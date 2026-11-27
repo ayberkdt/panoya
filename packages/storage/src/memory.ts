@@ -19,7 +19,14 @@ const clone = <T>(value: T): T => structuredClone(value);
 function emptyTables(): Tables {
   return {
     workspaces: new Map(),
-    entities: { folder: new Map(), notebook: new Map(), page: new Map(), block: new Map() },
+    entities: {
+      folder: new Map(),
+      notebook: new Map(),
+      page: new Map(),
+      block: new Map(),
+      dataset: new Map(),
+      datasetRow: new Map(),
+    },
     logs: new Map(),
     seq: 0,
   };
@@ -33,6 +40,8 @@ function copyTables(t: Tables): Tables {
       notebook: new Map(t.entities.notebook),
       page: new Map(t.entities.page),
       block: new Map(t.entities.block),
+      dataset: new Map(t.entities.dataset),
+      datasetRow: new Map(t.entities.datasetRow),
     },
     logs: new Map(t.logs),
     seq: t.seq,
@@ -70,6 +79,10 @@ export class MemoryBackend implements StorageBackend {
       };
       const tx: Transaction = {
         hasWorkspace: async (id) => staged.workspaces.has(id),
+        listByWorkspace: async <K extends EntityKind>(kind: K, workspaceId: string) =>
+          [...staged.entities[kind].values()]
+            .filter((e) => e.workspaceId === workspaceId)
+            .map(clone) as EntityOf<K>[],
         getWorkspace: async (id) => clone(staged.workspaces.get(id)),
         putWorkspace: async (w) => {
           staged.workspaces.set(w.id, clone(w));
@@ -139,6 +152,18 @@ export class MemoryBackend implements StorageBackend {
     return [...this.tables.entities.block.values()]
       .filter((b) => b.kind === 'block' && b.pageId === pageId)
       .map(clone) as EntityOf<'block'>[];
+  }
+
+  async blocksOfWorkspace(workspaceId: string): Promise<EntityOf<'block'>[]> {
+    return [...this.tables.entities.block.values()]
+      .filter((b) => b.workspaceId === workspaceId)
+      .map(clone) as EntityOf<'block'>[];
+  }
+
+  async rowsOfDataset(datasetId: string): Promise<EntityOf<'datasetRow'>[]> {
+    return [...this.tables.entities.datasetRow.values()]
+      .filter((r) => r.kind === 'datasetRow' && r.datasetId === datasetId)
+      .map(clone) as EntityOf<'datasetRow'>[];
   }
 
   async listTrashed(workspaceId: string): Promise<Entity[]> {

@@ -24,6 +24,8 @@ export interface BlockDefinition<P = unknown> {
   toPlainText(payload: P): string;
   toMarkdown(payload: P): string;
   references?(payload: P): ValueRef[];
+  /** Ids of datasets this block references (copied when the block or page is duplicated). */
+  datasetRefs?(payload: P): string[];
   /** Ids of pages this block links to (backlinks, duplicate remap). */
   pageRefs?(payload: P): string[];
   remapReferences?(payload: P, map: (id: string) => string | undefined): P;
@@ -87,6 +89,13 @@ export class BlockRegistry implements BlockCatalog {
     const valid = definition.schema.safeParse(payload);
     if (!valid.success || !definition.remapReferences) return payload;
     return definition.remapReferences(valid.data, map) as JsonValue;
+  }
+
+  datasetRefs(type: string, payload: JsonValue): string[] {
+    const definition = this.definitions.get(type);
+    if (!definition?.datasetRefs) return [];
+    const valid = definition.schema.safeParse(payload);
+    return valid.success ? definition.datasetRefs(valid.data) : [];
   }
 
   /** Resolve a stored block for display. Never throws and never alters the stored payload. */
