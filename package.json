@@ -1,0 +1,38 @@
+{
+  "name": "panoya",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.23.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "node apps/web/node_modules/vite/bin/vite.js apps/web",
+    "build": "node apps/web/node_modules/vite/bin/vite.js build apps/web",
+    "preview": "node apps/web/node_modules/vite/bin/vite.js preview apps/web",
+    "typecheck": "tsc -p packages/domain && tsc -p packages/blocks && tsc -p packages/storage && tsc -p apps/web",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "playwright test",
+    "check": "eslint . && tsc -p packages/domain && tsc -p packages/blocks && tsc -p packages/storage && tsc -p apps/web && vitest run && node apps/web/node_modules/vite/bin/vite.js build apps/web"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.65.1",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.13",
+    "@types/node": "24.19.4",
+    "eslint": "10.15.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "fake-indexeddb": "6.2.8",
+    "globals": "17.14.0",
+    "jsdom": "31.0.1",
+    "prettier": "3.10.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.74.0",
+    "vitest": "5.1.2"
+  }
+}

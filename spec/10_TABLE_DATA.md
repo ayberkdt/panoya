@@ -1,0 +1,13 @@
+# 10 — Data tables and typed datasets
+
+## Dataset model
+Columns: stable id, label, type (`text`, `number`, `decimal`, `money`, `boolean`, `date`, `category`), optional unit/currency, nullable, formatting, metadata. DatasetRow cells keyed by column ID; missing distinct from 0, false and empty string. Row/column IDs preserved after sorting. Numeric input locale-aware: parse explicitly based on selected locale, do not guess `1,234`; show validation and preview; keep original source on import. Dates ISO date or timestamp with explicit timezone. Dataset immutable snapshot for calculations; revision increments on committed data changes. Charts/stats consume dataset snapshot, not screen DOM.
+
+## Grid UI
+Editable grid with add/delete row/column, rename, keyboard navigation, paste rectangular TSV, selection, duplicate, filter, sort, frozen headers, undo bulk edits. Sort/filter is view state unless explicit materialize new dataset; analysis defaults all valid rows, option to use saved filter with explicit label. On mobile horizontal table scroll and row edit sheet; don't force full page width. Virtualize large rows only after correctness. Column deletion/type conversion previews invalid cells and dependent references, requires confirmation. No silent coercion; user chooses missing or fixes. Validation per cell with error count and jump to next error.
+
+## Import and export
+CSV/TSV: robust RFC-style quoting, BOM, CRLF, delimiter preview (comma/semicolon/tab), multiline cells, duplicate header disambiguation; max 10 MB initial file and 100k cells adjustable after profiling, stream/worker for large files; cancellation. Preview sample, infer column types as suggestions only, user confirms locale and schema; commit atomic or staged validated batches with final publication. XLSX P1 read explicit worksheet, cached formula values only with warning; never execute macros/external links/formulas. Export CSV UTF-8, TSV clipboard, JSON typed backup and XLSX P1. CSV spreadsheet injection risk for text starting =,+,-,@ or control chars: default spreadsheet-safe export neutralizes formula-like text (warn transformation); raw export explicit. Do not prefix actual numeric negative values. Roundtrip exact typed content via JSON, not CSV.
+
+## Acceptance
+Fixture 1,2,3,4,5,missing yields 5 valid values; 0 remains valid. Import `1.234,56` tr-TR correctly; ambiguous locale requires choice. Quotes, Turkish letters, multiline text preserved. Sorting doesn't change analytics unless filter explicitly selected. Bulk paste invalid value gives preview/rejection not partial writes. Formula injection test, oversized file rejection, import cancel leaves no partial dataset, charts recalc after edit and column deletion yields missing reference.

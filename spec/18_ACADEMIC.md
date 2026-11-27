@@ -1,0 +1,11 @@
+# 18 — Academic and scientific workspace
+
+## Academic helpers
+Reference block: title, authors ordered list, year, journal/conference, DOI, URL, notes, BibTeX raw import optional. Validate DOI syntax lightly (not claim existence), normalize DOI resolver link safely, manual fields editable. No automatic network lookup without explicit action; if later Crossref adapter added, distinguish returned metadata and user overrides, cite source and date, handle missing records. Export BibTeX and basic formatted references; exact APA/IEEE support only with tested CSL processor, not approximate labels. Duplicate detection DOI/title suggestions, no automatic merge.
+
+Equation block stores LaTeX source and display metadata; variable definitions via separate typed number inputs; copy source. Unit-aware quantity block: define dimension vector (SI base dimensions) and scale, convert compatible units only; affine temperature absolute vs difference explicitly separate. Start length, time, mass, angle, speed, acceleration, force, pressure, energy; test km→m, deg→rad, Celsius/K, incompatible sums. Do not implicitly combine numeric unit conversion with FX. No symbolic solver claim until implemented and tested.
+
+Scientific notebook examples: orbit parameters (altitude, radius, mu with units), simple circular velocity formula using consistent SI, uncertainty dataset, experiment checklist, citation list. No high-fidelity orbit simulation in this app initially. GPA block supports credits and grade points, configurable grading scheme, repeated-course policy explicit; no institutional claim without verified rules. Task/date block supports date-only vs timed event, timezone; countdown computed from explicit current time UI, no hidden notification/scheduler promise.
+
+## Acceptance
+Copy equation preserves backslashes; invalid LaTeX source recoverable; reference export handles accents and braces safely; DOI URL safe; duplicate notebook remaps internal formulas, datasets, references; incompatible units error; 1 km=1000 m, 180 deg=π rad within documented tolerance; GPA weighted average example 3 credits×4 + 2×3 = 3.6; no silent institutional assumptions. Scientific calculations display method and units. Any later integration with Stats-Lab requires separate audit per 12.

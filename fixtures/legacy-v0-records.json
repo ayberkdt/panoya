@@ -1,0 +1,52 @@
+{
+  "description": "Synthetic pre-release (schema v0) records used by migration tests. No real data.",
+  "workspace": {
+    "id": "aaaaaaaa-0000-4000-8000-000000000001",
+    "name": "Eski çalışma alanı",
+    "locale": "tr-TR",
+    "baseCurrency": "EUR",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z"
+  },
+  "records": [
+    {
+      "id": "aaaaaaaa-0000-4000-8000-000000000010",
+      "workspaceId": "aaaaaaaa-0000-4000-8000-000000000001",
+      "kind": "folder",
+      "parentFolderId": null,
+      "name": "Üniversite",
+      "rank": "a0",
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z",
+      "deletedAt": null,
+      "localRevision": 1
+    },
+    {
+      "id": "aaaaaaaa-0000-4000-8000-000000000020",
+      "workspaceId": "aaaaaaaa-0000-4000-8000-000000000001",
+      "kind": "notebook",
+      "folderId": "aaaaaaaa-0000-4000-8000-000000000010",
+      "title": "Linkler",
+      "icon": null,
+      "rank": "a0",
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z",
+      "deletedAt": null,
+      "localRevision": 1
+    },
+    {
+      "id": "aaaaaaaa-0000-4000-8000-000000000030",
+      "workspaceId": "aaaaaaaa-0000-4000-8000-000000000001",
+      "kind": "page",
+      "notebookId": "aaaaaaaa-0000-4000-8000-000000000020",
+      "title": "Silinmiş sayfa",
+      "rank": "a0",
+      "archivedAt": null,
+      "templateId": null,
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-02T00:00:00.000Z",
+      "deleted": true,
+      "localRevision": 2
+    }
+  ]
+}
