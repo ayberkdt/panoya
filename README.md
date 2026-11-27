@@ -50,13 +50,19 @@ Veri akışı: arayüz niyeti → doğrulanmış komut → tek IndexedDB işlemi
 Ayarların hepsi [`vercel.json`](vercel.json)'da; panelde bir şey değiştirmen gerekmez.
 
 1. Vercel → **Add New… → Project** → GitHub'dan `ayberkdt/panoya` deposunu içe aktar.
-2. **Root Directory**: depo kökü (boş bırak). Framework Preset "Other" olarak gelir.
+2. **Root Directory**: depo kökü ya da Vercel'in önerdiği `apps/web`; ikisi de çalışır.
+   Framework Preset "Other" kalır, Build/Output alanlarını boş bırak.
 3. Ortam değişkeni yok. **Deploy**.
 
 `vercel.json` şunları sabitler:
 
 - Kurulum `npx --yes pnpm@12.23.0 install --frozen-lockfile` (Vercel'in kendi pnpm sürümü değil,
-  `packageManager` ile aynı sürüm), derleme `kontrast kapısı + vite build`, çıktı `apps/web/dist`.
+  `packageManager` ile aynı sürüm). Derleme `npm run vercel-build`: iki `package.json`'da da
+  aynı adla durur ve [`scripts/vercel-build.mjs`](scripts/vercel-build.mjs)'i çağırır. Betik
+  depo kökünü kendisi bulur, kontrast kapısını ve `vite build`'i çalıştırır, çıktıyı Root
+  Directory altındaki `dist/` klasörüne yazar.
+- Node 24: kök ve `apps/web` `package.json`'larında `engines.node: "24.x"` (Vercel sürümü Root
+  Directory'deki dosyadan okur; olmazsa yeni projelerde Node 26 kullanır).
 - Tek sayfa uygulama yönlendirmesi: `/w/…/p/…` gibi derin linkler doğrudan açılır (var olan
   dosyalar önce sunulur, kalan her yol `index.html`'e düşer).
 - Güvenlik başlıkları: sıkı CSP (`script-src 'self'`, `style-src 'self'`, dış bağlantı yok),
